@@ -1,0 +1,6 @@
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\BiomesKit\1.1\Assemblies\BiomesKit.dll
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\BiomesKit\1.1\Assemblies\BiomesKit.pdb
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\BiomesKit\1.1\Source\BiomesKit\obj\Debug\BiomesKit.csprojAssemblyReference.cache
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\BiomesKit\1.1\Source\BiomesKit\obj\Debug\BiomesKit.csproj.CoreCompileInputs.cache
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\BiomesKit\1.1\Source\BiomesKit\obj\Debug\BiomesKit.dll
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\BiomesKit\1.1\Source\BiomesKit\obj\Debug\BiomesKit.pdb
