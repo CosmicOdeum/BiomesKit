@@ -6,6 +6,7 @@ using RimWorld.Planet;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
@@ -70,7 +71,64 @@ namespace BiomesKit
 
 	}
 
+	[StaticConstructorOnStartup]
+	public static class ErrorLogs
+	{
+		static ErrorLogs()
+		{
+			List<BiomeDef> allDefsListForReading = DefDatabase<BiomeDef>.AllDefsListForReading;
+			foreach (BiomeDef biomeDef2 in allDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
+			{
+				BiomesKitControls biomesKit = biomeDef2.GetModExtension<BiomesKitControls>();
+				HashSet<BiomeDef> defs = new HashSet<BiomeDef>();
+				foreach (BiomeDef targetBiome in biomesKit.spawnOnBiomes)
+				{
+					if (!defs.Add(targetBiome))
+					{
+						Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": spawnOnBiomes includes " + targetBiome + " twice.");
+					}
+				}
+				Material testMaterial = MaterialPool.MatFrom(biomesKit.materialPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+				if (biomesKit.materialLayer >= 3560)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": The materialLayer is set to 3560 or higher, making the material display on top of the selection indicator.");
+				}
+				if (!biomesKit.allowOnLand && !biomesKit.allowOnWater)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": Biome is disallowed on both land and water and will never spawn.");
+				}
+				if (biomesKit.minTemperature > biomesKit.maxTemperature)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": minTemperature set above maxTemperature.");
+				}
+				if (biomesKit.minNorthLatitude > biomesKit.maxNorthLatitude)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": minNorthLatitude set above maxNorthLatitude.");
+				}
+				if (biomesKit.minSouthLatitude > biomesKit.maxSouthLatitude)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": minSouthLatitude set above maxSouthLatitude.");
+				}
+				if (biomesKit.minHilliness > biomesKit.maxHilliness)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": minHilliness set above maxHilliness.");
+				}
+				if (biomesKit.minElevation > biomesKit.maxElevation)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": minElevation set above maxElevation.");
+				}
+				if (biomesKit.minRainfall > biomesKit.maxRainfall)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": minRainfall set above maxRainfall.");
+				}
+				if (biomesKit.frequency > 100)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": frequency set above 100. Frequency accepts values 1-100. Setting Frequency higher than that is not supported.");
+				}
+			}
+		}
 
+	}
 
 	public class LateBiomeWorker : WorldGenStep // Technically not a biomeworker, but whatever. Thanks Garthor!
 	{
@@ -88,120 +146,120 @@ namespace BiomesKit
 		{
 
 			List<BiomeDef> allDefsListForReading = DefDatabase<BiomeDef>.AllDefsListForReading;
-				foreach (BiomeDef biomeDef2 in allDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
+			foreach (BiomeDef biomeDef2 in allDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
+			{
+				BiomesKitControls biomesKit = biomeDef2.GetModExtension<BiomesKitControls>();
+				float minSouthLatitude = biomesKit.minSouthLatitude * -1;
+				float maxSouthLatitude = biomesKit.maxSouthLatitude * -1;
+				for (int tileID = 0; tileID < Find.WorldGrid.TilesCount; tileID++)
 				{
-					BiomesKitControls biomesKit = biomeDef2.GetModExtension<BiomesKitControls>();
-					float minSouthLatitude = biomesKit.minSouthLatitude * -1;
-					float maxSouthLatitude = biomesKit.maxSouthLatitude * -1;
-					for (int tileID = 0; tileID < Find.WorldGrid.TilesCount; tileID++)
+
+					float latitude = Find.WorldGrid.LongLatOf(tileID).y;
+					int perlinSeed = Find.World.info.Seed;
+					PerlinNoise = new Perlin(0.1, 10, 0.6, 12, perlinSeed, QualityMode.Low);
+					var coords = Find.WorldGrid.GetTileCenter(tileID);
+					float perlinNoiseValue = PerlinNoise.GetValue(coords);
+					Tile tile = Find.WorldGrid[tileID];
+					bool validTarget = true;
+					foreach (BiomeDef targetBiome in biomesKit.spawnOnBiomes)
 					{
-
-						float latitude = Find.WorldGrid.LongLatOf(tileID).y;
-						int perlinSeed = Find.World.info.Seed;
-						PerlinNoise = new Perlin(0.1, 10, 0.6, 12, perlinSeed, QualityMode.Low);
-						var coords = Find.WorldGrid.GetTileCenter(tileID);
-						float perlinNoiseValue = PerlinNoise.GetValue(coords);
-						Tile tile = Find.WorldGrid[tileID];
-						bool validTarget = true;
-						foreach (BiomeDef targetBiome in biomesKit.spawnOnBiomes)
+						if (tile.biome == targetBiome)
 						{
-							if (tile.biome == targetBiome)
-							{
-								validTarget = true;
-								break;
-							}
-							else
-							{
-								validTarget = false;
-							}
-						}
-						if (validTarget == false)
-						{
-							continue;
-						}
-						bool validSouthLatitude = true;
-						if (latitude < minSouthLatitude && latitude > maxSouthLatitude)
-						{
-							validSouthLatitude = true;
+							validTarget = true;
+							break;
 						}
 						else
 						{
-							validSouthLatitude = false;
+							validTarget = false;
 						}
-						bool validNorthLatitude = true;
-						if (latitude > biomesKit.minNorthLatitude && latitude < biomesKit.maxNorthLatitude)
-						{
-							validNorthLatitude = true;
-						}
-						else
-						{
-							validNorthLatitude = false;
-						}
-						if (validNorthLatitude == false && validSouthLatitude == false)
-						{
-							if (biomesKit.minSouthLatitude != -9999 && biomesKit.minNorthLatitude != -9999 && biomesKit.maxSouthLatitude != -9999 && biomesKit.maxNorthLatitude != 9999)
-							{
-								continue;
-							}
-						}
-						if (biomesKit.perlinCustomSeed != null)
-						{
-							perlinSeed = biomesKit.perlinCustomSeed.Value;
-						}
-						else if (biomesKit.useAlternativePerlinSeedPreset)
-						{
-							perlinSeed = tileID;
-						}
-						if (tile.WaterCovered && biomesKit.allowOnWater == false)
-						{
-							continue;
-						}
-						if (!tile.WaterCovered && biomesKit.allowOnLand == false)
-						{
-							continue;
-						}
-						if (biomesKit.needRiver == true)
-						{
-							if (tile.Rivers == null || tile.Rivers.Count == 0)
-							{
-								continue;
-							}
-						}
-						if (biomesKit.usePerlin == true)
-						{
-							if (perlinNoiseValue > (biomesKit.perlinCulling / 100f))
-							{
-								continue;
-							}
-						}
-						if (Rand.Value > (Math.Pow(biomesKit.frequency, 2) / 10000f))
-						{
-							continue;
-						}
-						if (tile.elevation < biomesKit.minElevation || tile.elevation > biomesKit.maxElevation)
-						{
-							continue;
-						}
-						if (tile.temperature < biomesKit.minTemperature || tile.temperature > biomesKit.maxTemperature)
-						{
-							continue;
-						}
-						if (tile.rainfall < biomesKit.minRainfall || tile.rainfall > biomesKit.maxRainfall)
-						{
-							continue;
-						}
-						if (tile.hilliness < biomesKit.minHilliness || tile.hilliness > biomesKit.maxHilliness)
-						{
-							continue;
-						}
-						tile.biome = biomeDef2;
-						if (biomesKit.spawnHills != null)
-						{
-							tile.hilliness = biomesKit.spawnHills.Value;
-						}
-
 					}
+					if (validTarget == false)
+					{
+						continue;
+					}
+					bool validSouthLatitude = true;
+					if (latitude < minSouthLatitude && latitude > maxSouthLatitude)
+					{
+						validSouthLatitude = true;
+					}
+					else
+					{
+						validSouthLatitude = false;
+					}
+					bool validNorthLatitude = true;
+					if (latitude > biomesKit.minNorthLatitude && latitude < biomesKit.maxNorthLatitude)
+					{
+						validNorthLatitude = true;
+					}
+					else
+					{
+						validNorthLatitude = false;
+					}
+					if (validNorthLatitude == false && validSouthLatitude == false)
+					{
+						if (biomesKit.minSouthLatitude != -9999 && biomesKit.minNorthLatitude != -9999 && biomesKit.maxSouthLatitude != -9999 && biomesKit.maxNorthLatitude != 9999)
+						{
+							continue;
+						}
+					}
+					if (biomesKit.perlinCustomSeed != null)
+					{
+						perlinSeed = biomesKit.perlinCustomSeed.Value;
+					}
+					else if (biomesKit.useAlternativePerlinSeedPreset)
+					{
+						perlinSeed = tileID;
+					}
+					if (tile.WaterCovered && biomesKit.allowOnWater == false)
+					{
+						continue;
+					}
+					if (!tile.WaterCovered && biomesKit.allowOnLand == false)
+					{
+						continue;
+					}
+					if (biomesKit.needRiver == true)
+					{
+						if (tile.Rivers == null || tile.Rivers.Count == 0)
+						{
+							continue;
+						}
+					}
+					if (biomesKit.usePerlin == true)
+					{
+						if (perlinNoiseValue > (biomesKit.perlinCulling / 100f))
+						{
+							continue;
+						}
+					}
+					if (Rand.Value > (Math.Pow(biomesKit.frequency, 2) / 10000f))
+					{
+						continue;
+					}
+					if (tile.elevation < biomesKit.minElevation || tile.elevation > biomesKit.maxElevation)
+					{
+						continue;
+					}
+					if (tile.temperature < biomesKit.minTemperature || tile.temperature > biomesKit.maxTemperature)
+					{
+						continue;
+					}
+					if (tile.rainfall < biomesKit.minRainfall || tile.rainfall > biomesKit.maxRainfall)
+					{
+						continue;
+					}
+					if (tile.hilliness < biomesKit.minHilliness || tile.hilliness > biomesKit.maxHilliness)
+					{
+						continue;
+					}
+					tile.biome = biomeDef2;
+					if (biomesKit.spawnHills != null)
+					{
+						tile.hilliness = biomesKit.spawnHills.Value;
+					}
+
 				}
+			}
 		}
 
 	}
@@ -230,9 +288,9 @@ namespace BiomesKit
 						if (biomesKit.materialPath == "World/MapGraphics/Default")
 							continue;
 						Material material = MaterialPool.MatFrom(biomesKit.materialPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-						LayerSubMesh subMesh = base.GetSubMesh(material);
+						LayerSubMesh subMesh = GetSubMesh(material);
 						Vector3 vector = worldGrid.GetTileCenter(tileID);
-						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, worldGrid.averageTileSize, 0.01f, subMesh, false, false, false);
+						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, worldGrid.averageTileSize, 0.01f, subMesh, false, true, false);
 						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMesh);
 					}
 				}
