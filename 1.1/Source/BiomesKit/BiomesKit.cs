@@ -43,7 +43,7 @@ namespace BiomesKit
 		public bool useAlternativePerlinSeedPreset = false;
 		public bool usePerlin = false;
 		public int? perlinCustomSeed = null;
-		public float perlinCulling = 0;
+		public float perlinCulling = 0.5f;
 		public double perlinFrequency;
 		public double perlinLacunarity;
 		public double perlinPersistence;
@@ -125,6 +125,15 @@ namespace BiomesKit
 				{
 					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": frequency set above 100. Frequency accepts values 1-100. Setting Frequency higher than that is not supported.");
 				}
+				if (biomesKit.usePerlin == false && biomesKit.useAlternativePerlinSeedPreset == true)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": usePerlin is false but useAlternativePerlinSeedPreset is true. useAlternativePerlinSeedPreset should be false if usePerlin is set to false.");
+				}
+				if (biomesKit.usePerlin == false && biomesKit.perlinCustomSeed != null)
+				{
+					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": usePerlin is false but perlinCustomSeed is assigned. perlinCustomSeed will not be read if usePerlin is set to false.");
+				}
+
 			}
 		}
 
