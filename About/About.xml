@@ -19,6 +19,9 @@
     <li>Ludeon.RimWorld.Royalty</li>
     <li>brrainz.harmony</li>
   </loadAfter>
+  <loadBefore>
+    <li>BiomesTeam.BiomesCore</li>
+  </loadBefore>
   <description>
 BiomesKit is a framework for the placement of biomes on the world map at worldgen. Previously, modders needed to utilize C# to add new biomes to rimworld. With BiomesKit, placement of a biome can be controlled with XML tags in the BiomeDef itself.
 
