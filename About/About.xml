@@ -19,6 +19,9 @@
     <li>Ludeon.RimWorld.Royalty</li>
     <li>brrainz.harmony</li>
   </loadAfter>
+  <loadBefore>
+    <li>BiomesTeam.BiomesCore</li>
+  </loadBefore>
   <description>
 The core module for the Biomes! mods. Necessary for all of the Biomes! modules.
 
