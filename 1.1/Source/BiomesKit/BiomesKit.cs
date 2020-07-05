@@ -26,6 +26,7 @@ namespace BiomesKit
 		public bool allowOnWater = false;
 		public bool allowOnLand = false;
 		public bool needRiver = false;
+		public bool randomizeHilliness = false;
 		public float minTemperature = -999;
 		public float maxTemperature = 999;
 		public float minElevation = -9999;
@@ -39,7 +40,7 @@ namespace BiomesKit
 		public Hilliness? spawnHills = null;
 		public float minRainfall = -9999;
 		public float maxRainfall = 9999;
-		public float frequency = 100;
+		public int frequency = 100;
 		public bool useAlternativePerlinSeedPreset = false;
 		public bool usePerlin = false;
 		public int? perlinCustomSeed = null;
@@ -143,7 +144,6 @@ namespace BiomesKit
 	{
 		public static ModuleBase PerlinNoise = null;
 		public bool validForPrinting = true;
-		private static readonly IntVec2 TexturesInAtlas = new IntVec2(2, 2);
 		public override int SeedPart
 		{
 			get
@@ -153,9 +153,12 @@ namespace BiomesKit
 		}
 		public override void GenerateFresh(string seed)
 		{
+			BiomesKit();
+		}
+		private void BiomesKit()
+		{
 
-			List<BiomeDef> allDefsListForReading = DefDatabase<BiomeDef>.AllDefsListForReading;
-			foreach (BiomeDef biomeDef2 in allDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
+			foreach (BiomeDef biomeDef2 in DefDatabase<BiomeDef>.AllDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
 			{
 				BiomesKitControls biomesKit = biomeDef2.GetModExtension<BiomesKitControls>();
 				float minSouthLatitude = biomesKit.minSouthLatitude * -1;
@@ -242,8 +245,8 @@ namespace BiomesKit
 						}
 					}
 					if (Rand.Value > (Math.Pow(biomesKit.frequency, 2) / 10000f))
-					{
-						continue;
+						{
+							continue;
 					}
 					if (tile.elevation < biomesKit.minElevation || tile.elevation > biomesKit.maxElevation)
 					{
@@ -260,6 +263,24 @@ namespace BiomesKit
 					if (tile.hilliness < biomesKit.minHilliness || tile.hilliness > biomesKit.maxHilliness)
 					{
 						continue;
+					}
+					if (biomesKit.randomizeHilliness == true)
+					{
+						switch (Rand.Range(0, 4))
+						{
+							case 0:
+								tile.hilliness = Hilliness.Flat;
+								break;
+							case 1:
+								tile.hilliness = Hilliness.SmallHills;
+								break;
+							case 2:
+								tile.hilliness = Hilliness.LargeHills;
+								break;
+							case 3:
+								tile.hilliness = Hilliness.Mountainous;
+								break;
+						}
 					}
 					tile.biome = biomeDef2;
 					if (biomesKit.spawnHills != null)
