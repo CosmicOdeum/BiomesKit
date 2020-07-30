@@ -13,7 +13,7 @@ using Verse.Noise;
 
 namespace BiomesKit
 {
-	public sealed class HarmonyStarter : Mod
+    public sealed class HarmonyStarter : Mod
 	{
 		public const String HarmonyId = "net.biomes.terrainkit";
 
