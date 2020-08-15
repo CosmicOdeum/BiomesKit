@@ -194,165 +194,166 @@ namespace BiomesKit
 				// so this is done for each BiomeDef with the ModExtension.
 				for (int tileID = 0; tileID < Find.WorldGrid.TilesCount; tileID++)
 				{
-					// Next we find out what latitude the tile is on.
-					float latitude = Find.WorldGrid.LongLatOf(tileID).y;
-					// We set up some perlin values.
-					int perlinSeed = Find.World.info.Seed;
-					var coords = Find.WorldGrid.GetTileCenter(tileID);
-					float perlinNoiseValue = PerlinNoise.GetValue(coords);
+					WorldGrid worldGrid = Find.WorldGrid;
+					Tile tile = worldGrid[tileID];
+                    // Next we find out what latitude the tile is on.
+                    float latitude = worldGrid.LongLatOf(tileID).y;
+                    // We set up some perlin values.
+                    int perlinSeed = Find.World.info.Seed;
+                    var coords = worldGrid.GetTileCenter(tileID);
 					// We give ourselves a way to reference the tile that's being checked.
-					Tile tile = Find.WorldGrid[tileID];
 					// Now we start actually doing something. First up, we respond to the spawnOnBiomes tag.
 					bool validTarget = true; // The tile is a valid target by default.
-					// We iterate through another list. This time of biomes specified by the tag.
-					foreach (BiomeDef targetBiome in biomesKit.spawnOnBiomes)
-					{
-						// If the BiomeDef matches the tile, we declare the tile a valid target and stop iterating.
-						if (tile.biome == targetBiome)
-						{
-							validTarget = true;
-							break;
-						}
-						// If the BiomeDef doesn't match the tile, we declare the tile an invalid target and move on to the next BiomeDef on the list.
-						else
-						{
-							validTarget = false;
-						}
-					}
-					// After that, if the tile is no longer a valid target, we skip to the next tile.
-					if (validTarget == false)
-					{
-						continue;
-					}
-					// Next up is the latitude tags.
-					bool validSouthLatitude = true; // Southern latitude is valid by default.
-					// If the tile's southern latitude is lesser than the minimum and greater than the maximum, declare the tile's south latitude valid. 
-					// Since southern altitude uses negative numbers, we want it lower than the minimum and higher than the maximum.
-					if (latitude < minSouthLatitude && latitude > maxSouthLatitude)
-					{
-						validSouthLatitude = true;
-					}
-					// If the tile's southern latitude is greater than the ninimum and lesser than the maximum, we declare the tile's south latitude invalid.
-					else
-					{
-						validSouthLatitude = false;
-					}
-					// Now for the northern latitude.
-					bool validNorthLatitude = true; // Northern latitude is also valid by default.
-					// If the tile's northern latitude is greater than the minimum and lesser than the maximum, declare the north latitude valid.
-					if (latitude > biomesKit.minNorthLatitude && latitude < biomesKit.maxNorthLatitude)
-					{
-						validNorthLatitude = true;
-					}
-					// If the tile's northern latitude is lesser than the minimum and greater than the maximum, declare the northern latitude invalid.
-					else
-					{
-						validNorthLatitude = false;
-					}
-					// We check if both the north and the south latitudes are invalid.
-					if (validNorthLatitude == false && validSouthLatitude == false)
-					{
-						// If they are both invalid, we check if every latitude tag has been set by the user.
-						if (biomesKit.minSouthLatitude != -9999 && biomesKit.minNorthLatitude != -9999 && biomesKit.maxSouthLatitude != -9999 && biomesKit.maxNorthLatitude != 9999)
-						{
-							continue; // If not a single latitude tag has been set, we skip to the next tile.
-						}
-					}
-					// If the tile is a water tile and the biome is not allowed on water, we skip to the next tile.
-					if (tile.WaterCovered && biomesKit.allowOnWater == false)
-					{
-						continue;
-					}
-					// If the tile is a land tile and the biome is not allowed on land, we skip to the next tile.
-					if (!tile.WaterCovered && biomesKit.allowOnLand == false)
-					{
-						continue;
-					}
-					// Does the biome need a river?
-					if (biomesKit.needRiver == true)
-					{
-						// If it does, and the tile doesn't have a river, we skip to the next tile.
-						if (tile.Rivers == null || tile.Rivers.Count == 0)
-						{
-							continue;
-						}
-					}
-					// Now we define the Perlin Noise seed.
-					// If the user has assigned a custom seed, we use that.
-					if (biomesKit.perlinCustomSeed != null)
-					{
-						perlinSeed = biomesKit.perlinCustomSeed.Value;
-					}
-					// If not, we check if they've asked to use the alternative preset seed.
-					else if (biomesKit.useAlternativePerlinSeedPreset) // If they have, we use that.
-					{
-						perlinSeed = tileID;
-					}
-					// Are we using perlin for this biome?
-					if (biomesKit.usePerlin == true)
-					{
-						// If we are, it's time to generate our perlin noise.
-						PerlinNoise = new Perlin(0.1, 10, 0.6, 12, perlinSeed, QualityMode.Low);
+                    // We iterate through another list. This time of biomes specified by the tag.
+                    foreach (BiomeDef targetBiome in biomesKit.spawnOnBiomes)
+                    {
+                        // If the BiomeDef matches the tile, we declare the tile a valid target and stop iterating.
+                        if (tile.biome == targetBiome)
+                        {
+                            validTarget = true;
+                            break;
+                        }
+                        // If the BiomeDef doesn't match the tile, we declare the tile an invalid target and move on to the next BiomeDef on the list.
+                        else
+                        {
+                            validTarget = false;
+                        }
+                    }
+                    // After that, if the tile is no longer a valid target, we skip to the next tile.
+                    if (validTarget == false)
+                    {
+                        continue;
+                    }
+                    // Next up is the latitude tags.
+                    bool validSouthLatitude = true; // Southern latitude is valid by default.
+                                                    // If the tile's southern latitude is lesser than the minimum and greater than the maximum, declare the tile's south latitude valid. 
+                                                    // Since southern altitude uses negative numbers, we want it lower than the minimum and higher than the maximum.
+                    if (latitude < minSouthLatitude && latitude > maxSouthLatitude)
+                    {
+                        validSouthLatitude = true;
+                    }
+                    // If the tile's southern latitude is greater than the ninimum and lesser than the maximum, we declare the tile's south latitude invalid.
+                    else
+                    {
+                        validSouthLatitude = false;
+                    }
+                    // Now for the northern latitude.
+                    bool validNorthLatitude = true; // Northern latitude is also valid by default.
+                                                    // If the tile's northern latitude is greater than the minimum and lesser than the maximum, declare the north latitude valid.
+                    if (latitude > biomesKit.minNorthLatitude && latitude < biomesKit.maxNorthLatitude)
+                    {
+                        validNorthLatitude = true;
+                    }
+                    // If the tile's northern latitude is lesser than the minimum and greater than the maximum, declare the northern latitude invalid.
+                    else
+                    {
+                        validNorthLatitude = false;
+                    }
+                    // We check if both the north and the south latitudes are invalid.
+                    if (validNorthLatitude == false && validSouthLatitude == false)
+                    {
+                        // If they are both invalid, we check if every latitude tag has been set by the user.
+                        if (biomesKit.minSouthLatitude != -9999 && biomesKit.minNorthLatitude != -9999 && biomesKit.maxSouthLatitude != -9999 && biomesKit.maxNorthLatitude != 9999)
+                        {
+                            continue; // If not a single latitude tag has been set, we skip to the next tile.
+                        }
+                    }
+                    // If the tile is a water tile and the biome is not allowed on water, we skip to the next tile.
+                    if (tile.WaterCovered && biomesKit.allowOnWater == false)
+                    {
+                        continue;
+                    }
+                    // If the tile is a land tile and the biome is not allowed on land, we skip to the next tile.
+                    if (!tile.WaterCovered && biomesKit.allowOnLand == false)
+                    {
+                        continue;
+                    }
+                    // Does the biome need a river?
+                    if (biomesKit.needRiver == true)
+                    {
+                        // If it does, and the tile doesn't have a river, we skip to the next tile.
+                        if (tile.Rivers == null || tile.Rivers.Count == 0)
+                        {
+                            continue;
+                        }
+                    }
+                    // Now we define the Perlin Noise seed.
+                    // If the user has assigned a custom seed, we use that.
+                    if (biomesKit.perlinCustomSeed != null)
+                    {
+                        perlinSeed = biomesKit.perlinCustomSeed.Value;
+                    }
+                    // If not, we check if they've asked to use the alternative preset seed.
+                    else if (biomesKit.useAlternativePerlinSeedPreset) // If they have, we use that.
+                    {
+                        perlinSeed = tileID;
+                    }
+                    // Are we using perlin for this biome?
+                    if (biomesKit.usePerlin == true)
+                    {
+                        // If we are, it's time to generate our perlin noise.
+                        PerlinNoise = new Perlin(0.1, 10, 0.6, 12, perlinSeed, QualityMode.Low);
+						float perlinNoiseValue = PerlinNoise.GetValue(coords);
 						// And after that we cull the lower perlin values.
-						if (perlinNoiseValue > (biomesKit.perlinCulling))
-						{
-							continue;
-						}
-					}
-					// Compare a random number between 0 and 1 to the userdefined frequency to the power of two divided by ten thousand. I promise it makes sense to do it this way.
-					if (Rand.Value > (Math.Pow(biomesKit.frequency, 2) / 10000f))
-						{
-							continue;
-					}
-					// If the tile's elevation is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
-					if (tile.elevation < biomesKit.minElevation || tile.elevation > biomesKit.maxElevation)
-					{
-						continue;
-					}
-					// If the tile's temperature is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
-					if (tile.temperature < biomesKit.minTemperature || tile.temperature > biomesKit.maxTemperature)
-					{
-						continue;
-					}
-					// If the tile's rainfall is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
-					if (tile.rainfall < biomesKit.minRainfall || tile.rainfall > biomesKit.maxRainfall)
-					{
-						continue;
-					}
-					// If the tile's hilliness is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
-					if (tile.hilliness < biomesKit.minHilliness || tile.hilliness > biomesKit.maxHilliness)
-					{
-						continue;
-					}
-					// If we get this far, we can spawn the biome!
-					tile.biome = biomeDef2;
-					// If the user wants to give random hilliness to the biome, we do that here.
-					if (biomesKit.randomizeHilliness == true)
-					{
-						// random number from 0 to 3.
-						switch (Rand.Range(0, 3))
-						{
-							case 0: // 0 means flat.
-								tile.hilliness = Hilliness.Flat;
-								break;
-							case 1: // 1 means small hills.
-								tile.hilliness = Hilliness.SmallHills;
-								break;
-							case 2: // 2 means large hills.
-								tile.hilliness = Hilliness.LargeHills;
-								break;
-							case 3: // 3 means mountainous.
-								tile.hilliness = Hilliness.Mountainous;
-								break;
-						}
-					}
-					// If the user wants to give the biome a specific hilliness we can do that too.
-					if (biomesKit.spawnHills != null)
-					{
-						tile.hilliness = biomesKit.spawnHills.Value;
-					}
+						if (perlinNoiseValue <= (biomesKit.perlinCulling))
+                        {
+                            continue;
+                        }
+                    }
+                    // Compare a random number between 0 and 1 to the userdefined frequency to the power of two divided by ten thousand. I promise it makes sense to do it this way.
+                    if (Rand.Value > (Math.Pow(biomesKit.frequency, 2) / 10000f))
+                    {
+                        continue;
+                    }
+                    // If the tile's elevation is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
+                    if (tile.elevation < biomesKit.minElevation || tile.elevation > biomesKit.maxElevation)
+                    {
+                        continue;
+                    }
+                    // If the tile's temperature is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
+                    if (tile.temperature < biomesKit.minTemperature || tile.temperature > biomesKit.maxTemperature)
+                    {
+                        continue;
+                    }
+                    // If the tile's rainfall is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
+                    if (tile.rainfall < biomesKit.minRainfall || tile.rainfall > biomesKit.maxRainfall)
+                    {
+                        continue;
+                    }
+                    // If the tile's hilliness is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
+                    if (tile.hilliness < biomesKit.minHilliness || tile.hilliness > biomesKit.maxHilliness)
+                    {
+                        continue;
+                    }
+                    // If we get this far, we can spawn the biome!
+                    tile.biome = biomeDef2;
+                    // If the user wants to give random hilliness to the biome, we do that here.
+                    if (biomesKit.randomizeHilliness == true)
+                    {
+                        // random number from 0 to 3.
+                        switch (Rand.Range(0, 3))
+                        {
+                            case 0: // 0 means flat.
+                                tile.hilliness = Hilliness.Flat;
+                                break;
+                            case 1: // 1 means small hills.
+                                tile.hilliness = Hilliness.SmallHills;
+                                break;
+                            case 2: // 2 means large hills.
+                                tile.hilliness = Hilliness.LargeHills;
+                                break;
+                            case 3: // 3 means mountainous.
+                                tile.hilliness = Hilliness.Mountainous;
+                                break;
+                        }
+                    }
+                    // If the user wants to give the biome a specific hilliness we can do that too.
+                    if (biomesKit.spawnHills != null)
+                    {
+                        tile.hilliness = biomesKit.spawnHills.Value;
+                    }
 
-				}
+                }
 			}
 		}
 
