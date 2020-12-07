@@ -13,14 +13,14 @@ namespace BiomesKit
     {
         static WorldGenStepConstructor()
         {
-            WorldGenStepDef def = new WorldGenStepDef
+            WorldGenStepDef biomesKitWorldGenStep = new WorldGenStepDef
             {
                 defName = "BiomesKitWorldGenStep",
                 order = 211,
                 worldGenStep = new BiomesKit.LateBiomeWorker()
 
             };
-            DefDatabase<Verse.WorldGenStepDef>.Add(def);
+            DefDatabase<Verse.WorldGenStepDef>.Add(biomesKitWorldGenStep);
         }
     }
 }

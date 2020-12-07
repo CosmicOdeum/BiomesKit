@@ -1,4 +1,5 @@
-﻿using HarmonyLib;
+﻿using BiomesKit.ExtensionMethod;
+using HarmonyLib;
 using RimWorld;
 using RimWorld.Planet;
 using System;
@@ -48,22 +49,49 @@ namespace BiomesKit
 	{
 		public List<BiomeDef> spawnOnBiomes = new List<BiomeDef>();
 		public string materialPath = "World/MapGraphics/Default";
+		public string forestMaterialPath = "World/MapGraphics/Default";
+		public string hillMaterialPath = "World/MapGraphics/Default";
+		public float forestSnowyBelow = -9999;
+		public float forestSparseBelow = -9999;
+		public float forestDenseAbove = 9999;
 		public int materialLayer = 3515;
+		public float materialSizeMultiplier = 1;
+		public float materialOffset = 1f;
+		public bool materialRandomRotation = true;
+		public bool materialBlockedByRivers = false;
+		public bool materialBlockedByRoads = false;
+		public Hilliness materialMinHilliness;
+		public Hilliness materialMaxHilliness;
 		public bool allowOnWater = false;
-		public bool allowOnLand = false;
+		public bool allowOnLand = true;
+		public bool setNotWaterCovered = false;
+		public int minimumWaterNeighbors = 0;
+		public int minimumLandNeighbors = 0;
 		public bool needRiver = false;
 		public bool randomizeHilliness = false;
 		public float minTemperature = -999;
 		public float maxTemperature = 999;
 		public float minElevation = -9999;
 		public float maxElevation = 9999;
+		public float? setElevation;
 		public float minNorthLatitude = -9999;
 		public float maxNorthLatitude = -9999;
 		public float minSouthLatitude = -9999;
 		public float maxSouthLatitude = -9999;
 		public Hilliness minHilliness = Hilliness.Flat;
 		public Hilliness maxHilliness = Hilliness.Impassable;
-		public Hilliness? spawnHills = null;
+		public BiomesKitHilliness? spawnHills = null;
+		public enum BiomesKitHilliness
+		{
+			Undefined,
+			Flat,
+			SmallHills,
+			LargeHills,
+			Mountainous,
+			Impassable,
+			Random
+		}
+		public BiomesKitHilliness? setHills = null;
 		public float minRainfall = -9999;
 		public float maxRainfall = 9999;
 		public int frequency = 100;
@@ -86,17 +114,6 @@ namespace BiomesKit
 		}
 	}
 
-	[HarmonyPatch(typeof(Tile))]
-	[HarmonyPatch("Hilliness")]
-	static class Tile_Hilliness
-	{
-		public enum Hilliness : byte
-		{
-			Valley
-		}
-
-	}
-
 	[StaticConstructorOnStartup]
 	public static class ErrorLogs
 	{
@@ -114,7 +131,9 @@ namespace BiomesKit
 						Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": spawnOnBiomes includes " + targetBiome + " twice.");
 					}
 				}
-				Material testMaterial = MaterialPool.MatFrom(biomesKit.materialPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+				Material testMaterial;
+				if (biomesKit.materialPath != "World/MapGraphics/Default")
+					testMaterial = MaterialPool.MatFrom(biomesKit.materialPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
 				if (biomesKit.materialLayer >= 3560)
 				{
 					Log.Warning("[BiomesKit] XML Config Error: " + biomeDef2 + ": The materialLayer is set to 3560 or higher, making the material display on top of the selection indicator.");
@@ -165,10 +184,11 @@ namespace BiomesKit
 
 	}
 
-	public class LateBiomeWorker : WorldGenStep // Technically not a biomeworker, but whatever. Thanks Garthor!
+    public class LateBiomeWorker : WorldGenStep // Technically not a biomeworker, but whatever. Thanks Garthor!
 	{
 		public static ModuleBase PerlinNoise = null;
 		public bool validForPrinting = true;
+		public static Dictionary<Tile, Hilliness> backupHilliness = new Dictionary<Tile, Hilliness>();
 		public override int SeedPart
 		{
 			get
@@ -183,21 +203,24 @@ namespace BiomesKit
 		private void BiomesKit()
 		{
 			// Rimworld is kind enough to have a centralized list of all BiomeDefs. Here, we iterate through thouse with the BiomesKit ModExtension.
-			foreach (BiomeDef biomeDef2 in DefDatabase<BiomeDef>.AllDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
+			foreach (BiomeDef biomeDef in DefDatabase<BiomeDef>.AllDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
 			{
 				// We then get the modextension from the specific BiomeDef we are iterating through right now.
-				BiomesKitControls biomesKit = biomeDef2.GetModExtension<BiomesKitControls>();
+				BiomesKitControls biomesKit = biomeDef.GetModExtension<BiomesKitControls>();
 				// South Latitudes need to be negative values. Here we convert them for the user's convenience.
 				float minSouthLatitude = biomesKit.minSouthLatitude * -1;
 				float maxSouthLatitude = biomesKit.maxSouthLatitude * -1;
 				// Now we start iterating through tiles on the world map. This is inside the loop iterating through BiomeDefs.
 				// so this is done for each BiomeDef with the ModExtension.
-				for (int tileID = 0; tileID < Find.WorldGrid.TilesCount; tileID++)
+				WorldGrid worldGrid = Find.WorldGrid;
+				for (int tileID = 0; tileID < worldGrid.TilesCount; tileID++)
 				{
-					WorldGrid worldGrid = Find.WorldGrid;
+					Dictionary<Tile, Hilliness> backupHilliness = LateBiomeWorker.backupHilliness;
 					Tile tile = worldGrid[tileID];
-                    // Next we find out what latitude the tile is on.
-                    float latitude = worldGrid.LongLatOf(tileID).y;
+					if (!backupHilliness.ContainsKey(tile))
+						backupHilliness.Add(tile, tile.hilliness);
+					// Next we find out what latitude the tile is on.
+					float latitude = worldGrid.LongLatOf(tileID).y;
                     // We set up some perlin values.
                     int perlinSeed = Find.World.info.Seed;
                     var coords = worldGrid.GetTileCenter(tileID);
@@ -324,69 +347,200 @@ namespace BiomesKit
                     if (tile.hilliness < biomesKit.minHilliness || tile.hilliness > biomesKit.maxHilliness)
                     {
                         continue;
-                    }
-                    // If we get this far, we can spawn the biome!
-                    tile.biome = biomeDef2;
-                    // If the user wants to give random hilliness to the biome, we do that here.
-                    if (biomesKit.randomizeHilliness == true)
+					}
+					List<int> tmpNeighbors = new List<int>();
+					worldGrid.GetTileNeighbors(tileID, tmpNeighbors);
+					int neighbor = 0;
+					int waterNeighbors = 0;
+					bool enoughWaterNeighbors = true;
+					if (biomesKit.minimumWaterNeighbors > 0)
+					{
+						for (int count = tmpNeighbors.Count; neighbor < count; neighbor++)
+						{
+							if (worldGrid[tmpNeighbors[neighbor]].biome == BiomeDefOf.Ocean)
+							{
+								waterNeighbors += 1;
+								Log.Message("Water Neighbors =" + waterNeighbors);
+							}
+							if (waterNeighbors < biomesKit.minimumWaterNeighbors)
+							{
+								enoughWaterNeighbors = false;
+							}
+							if (waterNeighbors == biomesKit.minimumWaterNeighbors)
+							{
+								enoughWaterNeighbors = true;
+							}
+						}
+					}
+					if (enoughWaterNeighbors == false)
                     {
-                        // random number from 0 to 3.
-                        switch (Rand.Range(0, 3))
-                        {
-                            case 0: // 0 means flat.
-                                tile.hilliness = Hilliness.Flat;
-                                break;
-                            case 1: // 1 means small hills.
-                                tile.hilliness = Hilliness.SmallHills;
-                                break;
-                            case 2: // 2 means large hills.
-                                tile.hilliness = Hilliness.LargeHills;
-                                break;
-                            case 3: // 3 means mountainous.
-                                tile.hilliness = Hilliness.Mountainous;
-                                break;
-                        }
-                    }
-                    // If the user wants to give the biome a specific hilliness we can do that too.
-                    if (biomesKit.spawnHills != null)
-                    {
-                        tile.hilliness = biomesKit.spawnHills.Value;
-                    }
-
-                }
+						continue;
+					}
+					int landNeighbors = 0;
+					bool enoughLandNeighbors = true;
+					if (biomesKit.minimumWaterNeighbors > 0)
+					{
+						for (int count = tmpNeighbors.Count; neighbor < count; neighbor++)
+						{
+							if (worldGrid[tmpNeighbors[neighbor]].biome != BiomeDefOf.Ocean)
+							{
+								landNeighbors += 1;
+							}
+							if (waterNeighbors < biomesKit.minimumLandNeighbors)
+							{
+								enoughLandNeighbors = false;
+							}
+							if (waterNeighbors == biomesKit.minimumLandNeighbors)
+							{
+								enoughLandNeighbors = true;
+							}
+						}
+					}
+					if (enoughLandNeighbors == false)
+					{
+						continue;
+					}
+					// If we get this far, we can spawn the biome!
+					if (biomeDef.workerClass.Name == "UniversalBiomeWorker")
+						tile.biome = biomeDef;
+                    // If the user wants to actually change the hilliness of a tile, we handle that here.
+                    if (biomesKit.setHills != null)
+					{
+						int hilliness = (int)biomesKit.setHills;
+						if (biomesKit.spawnHills != null && biomesKit.setHills == null) // convert deprecated tag if modern tag is not used
+						{
+							hilliness = (int)biomesKit.spawnHills;
+							biomesKit.setHills = biomesKit.spawnHills;
+						}
+						if (biomesKit.setHills == BiomesKitControls.BiomesKitHilliness.Random)
+						{
+							// random number from 0 to 3.
+							switch (Rand.Range(0, 3))
+							{
+								case 0: // 0 means flat.
+									tile.hilliness = Hilliness.Flat;
+									break;
+								case 1: // 1 means small hills.
+									tile.hilliness = Hilliness.SmallHills;
+									break;
+								case 2: // 2 means large hills.
+									tile.hilliness = Hilliness.LargeHills;
+									break;
+								case 3: // 3 means mountainous.
+									tile.hilliness = Hilliness.Mountainous;
+									break;
+							}
+						}
+					}
+					if (biomesKit.hillMaterialPath != "World/MapGraphics/Default" && tile.biome.HasModExtension<BiomesKitControls>())
+					{
+						tile.hilliness = Hilliness.Flat;
+					}
+					if (biomesKit.setElevation != null)
+					{
+						tile.elevation = (float)biomesKit.setElevation;
+					}
+				}
 			}
 		}
-
-	}
+    }
 
 	public class BiomesKitWorldLayer : WorldLayer // Let's paint some worldmaterials.
 	{
 		private static readonly IntVec2 TexturesInAtlas = new IntVec2(2, 2); // two by two, meaning four variants for each worldmaterial.
 		public override IEnumerable Regenerate()
 		{
-			foreach (object obj in base.Regenerate()) // I'll be honest, I don't know what this does.
+			foreach (object obj in base.Regenerate())
 			{
 				yield return obj;
 			}
 			Rand.PushState();
 			Rand.Seed = Find.World.info.Seed;
 			WorldGrid worldGrid = Find.WorldGrid;
-			List<BiomeDef> allDefsListForReading = DefDatabase<BiomeDef>.AllDefsListForReading;
-			foreach (BiomeDef biomeDef in allDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
+			for (int tileID = 0; tileID < Find.WorldGrid.TilesCount; tileID++)
 			{
-				for (int tileID = 0; tileID < Find.WorldGrid.TilesCount; tileID++)
+				Tile tile = Find.WorldGrid[tileID];
+				if (tile.biome.HasModExtension<BiomesKitControls>())
 				{
-					Tile tile = Find.WorldGrid[tileID];
-					BiomesKitControls biomesKit = biomeDef.GetModExtension<BiomesKitControls>();
-					if (tile.biome != biomeDef)
-						continue;
-					if (biomesKit.materialPath == "World/MapGraphics/Default")
-						continue;
-					Material material = MaterialPool.MatFrom(biomesKit.materialPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-					LayerSubMesh subMesh = GetSubMesh(material);
+					Dictionary<Tile, Hilliness> backupHilliness = LateBiomeWorker.backupHilliness;
+					BiomesKitControls biomesKit = tile.biome.GetModExtension<BiomesKitControls>();
 					Vector3 vector = worldGrid.GetTileCenter(tileID);
-					WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, worldGrid.averageTileSize, 0.01f, subMesh, false, true, false);
-					WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMesh);
+					if (biomesKit.hillMaterialPath != "World/MapGraphics/Default")
+					{
+						tile.hilliness = backupHilliness[tile];
+						Material hill;
+						if (tile.hilliness == Hilliness.SmallHills)
+						{
+							hill = MaterialPool.MatFrom(biomesKit.hillMaterialPath + "/Hills/SmallHills", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+							LayerSubMesh subMeshHill = GetSubMesh(hill);
+							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * 1.5f), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
+							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
+						}
+						if (tile.hilliness == Hilliness.LargeHills)
+						{
+							hill = MaterialPool.MatFrom(biomesKit.hillMaterialPath + "/Hills/LargeHills", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+							LayerSubMesh subMeshHill = GetSubMesh(hill);
+							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * 1.5f), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
+							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
+						}
+						if (tile.hilliness == Hilliness.Mountainous)
+						{
+							hill = MaterialPool.MatFrom(biomesKit.hillMaterialPath + "/Hills/Mountains", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+							LayerSubMesh subMeshHill = GetSubMesh(hill);
+							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * 1.5f), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
+							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
+						}
+						if (tile.hilliness == Hilliness.Impassable)
+						{
+							hill = MaterialPool.MatFrom(biomesKit.hillMaterialPath + "/Hills/Impassable", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+							LayerSubMesh subMeshHill = GetSubMesh(hill);
+							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * 1.5f), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
+							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
+						}
+
+					}
+					if (biomesKit.materialMaxHilliness != Hilliness.Undefined)
+						if (tile.hilliness > biomesKit.materialMaxHilliness || tile.hilliness < biomesKit.materialMinHilliness)
+							continue;
+					bool roadPresent = true;
+					if (tile.Roads == null || tile.Roads.Count == 0)
+						roadPresent = false;
+					bool riverPresent = true;
+					if (tile.Rivers == null || tile.Rivers.Count == 0)
+						riverPresent = false;
+					if (biomesKit.forestMaterialPath != "World/MapGraphics/Default")
+					{
+						if (!riverPresent && !roadPresent)
+						{
+							Material forestMaterial;
+							if (tile.temperature < biomesKit.forestSnowyBelow)
+							{
+								forestMaterial = MaterialPool.MatFrom(biomesKit.forestMaterialPath + "/Forest_Snowy", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+							}
+							else if (tile.rainfall < biomesKit.forestSparseBelow)
+							{
+								forestMaterial = MaterialPool.MatFrom(biomesKit.forestMaterialPath + "/Forest_Sparse", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+							}
+							else if (tile.rainfall > biomesKit.forestDenseAbove)
+							{
+								forestMaterial = MaterialPool.MatFrom(biomesKit.forestMaterialPath + "/Forest_Dense", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+							}
+							else
+							{
+								forestMaterial = MaterialPool.MatFrom(biomesKit.forestMaterialPath + "/Forest", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+							}
+							LayerSubMesh subMeshForest = GetSubMesh(forestMaterial);
+							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.materialSizeMultiplier), 0.01f, subMeshForest, false, biomesKit.materialRandomRotation, false);
+							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshForest);
+						}
+					}
+					if (biomesKit.materialPath != "World/MapGraphics/Default")
+					{
+						Material material = MaterialPool.MatFrom(biomesKit.materialPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+						LayerSubMesh subMesh = GetSubMesh(material);
+						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.materialSizeMultiplier), 0.01f, subMesh, false, biomesKit.materialRandomRotation, false);
+						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMesh);
+					}
 				}
 			}
 			Rand.PopState();

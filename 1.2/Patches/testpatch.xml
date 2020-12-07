@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<Patch>
+  <Operation Class="PatchOperationAdd">
+    <xpath>/Defs/BiomeDef[defName = "TemperateForest"]</xpath>
+    <value>
+			<modExtensions>
+				<li Class="BiomesKit.BiomesKitControls">
+					<forestMaterialPath>BiomesIslands_World/MapGraphics/TemperateForest</forestMaterialPath>
+					<hillMaterialPath>BiomesIslands_World/MapGraphics/TemperateForest</hillMaterialPath>
+					<forestSparseBelow>1100</forestSparseBelow>
+					<forestDenseAbove>1500</forestDenseAbove>
+					<materialRandomRotation>false</materialRandomRotation>
+					<materialSizeMultiplier>1.5</materialSizeMultiplier>
+					<materialMaxHilliness>Flat</materialMaxHilliness>
+				</li>
+			</modExtensions>
+    </value>
+  </Operation>
+  
+  <Operation Class="PatchOperationAdd">
+    <xpath>/Defs/BiomeDef[defName = "BorealForest"]</xpath>
+    <value>
+			<modExtensions>
+				<li Class="BiomesKit.BiomesKitControls">
+					<forestMaterialPath>BiomesIslands_World/MapGraphics/BorealForest</forestMaterialPath>
+					<hillMaterialPath>BiomesIslands_World/MapGraphics/BorealForest</hillMaterialPath>
+					<forestSparseBelow>1100</forestSparseBelow>
+					<forestDenseAbove>1500</forestDenseAbove>
+					<materialRandomRotation>false</materialRandomRotation>
+					<materialSizeMultiplier>1.5</materialSizeMultiplier>
+					<materialMaxHilliness>Flat</materialMaxHilliness>
+				</li>
+			</modExtensions>
+    </value>
+  </Operation>
+</Patch>
