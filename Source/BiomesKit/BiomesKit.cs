@@ -14,7 +14,7 @@ using Verse.Noise;
 
 namespace BiomesKit
 {
-    public sealed class HarmonyStarter : Mod
+	public sealed class HarmonyStarter : Mod
 	{
 		public const String HarmonyId = "net.biomes.terrainkit";
 
@@ -48,18 +48,21 @@ namespace BiomesKit
 	public class BiomesKitControls : DefModExtension
 	{
 		public List<BiomeDef> spawnOnBiomes = new List<BiomeDef>();
+		public int? biomePriority;
 		public string materialPath = "World/MapGraphics/Default";
-		public string forestMaterialPath = "World/MapGraphics/Default";
-		public string hillMaterialPath = "World/MapGraphics/Default";
+		public bool forested = false;
+		public bool uniqueHills = false;
 		public float forestSnowyBelow = -9999;
 		public float forestSparseBelow = -9999;
 		public float forestDenseAbove = 9999;
 		public int materialLayer = 3515;
+		public float smallHillSizeMultiplier = 1.5f;
+		public float largeHillSizeMultiplier = 2f;
+		public float mountainSizeMultiplier = 1.4f;
+		public float impassableSizeMultiplier = 1.3f;
 		public float materialSizeMultiplier = 1;
 		public float materialOffset = 1f;
 		public bool materialRandomRotation = true;
-		public bool materialBlockedByRivers = false;
-		public bool materialBlockedByRoads = false;
 		public Hilliness materialMinHilliness;
 		public Hilliness materialMaxHilliness;
 		public bool allowOnWater = false;
@@ -81,16 +84,6 @@ namespace BiomesKit
 		public Hilliness minHilliness = Hilliness.Flat;
 		public Hilliness maxHilliness = Hilliness.Impassable;
 		public BiomesKitHilliness? spawnHills = null;
-		public enum BiomesKitHilliness
-		{
-			Undefined,
-			Flat,
-			SmallHills,
-			LargeHills,
-			Mountainous,
-			Impassable,
-			Random
-		}
 		public BiomesKitHilliness? setHills = null;
 		public float minRainfall = -9999;
 		public float maxRainfall = 9999;
@@ -112,6 +105,24 @@ namespace BiomesKit
 		{
 			return 0f;
 		}
+	}
+
+	public static class Dictionaries
+	{
+		public static Dictionary<Tile, Hilliness> backupHilliness = new Dictionary<Tile, Hilliness>();
+		public static Dictionary<Tile, Hilliness> tileRestored = new Dictionary<Tile, Hilliness>();
+	}
+
+	public enum BiomesKitHilliness
+	{
+		Undefined,
+		Flat,
+		SmallHills,
+		LargeHills,
+		Mountainous,
+		Impassable,
+		Random,
+		Valley
 	}
 
 	[StaticConstructorOnStartup]
@@ -184,11 +195,13 @@ namespace BiomesKit
 
 	}
 
-    public class LateBiomeWorker : WorldGenStep // Technically not a biomeworker, but whatever. Thanks Garthor!
+	public class LateBiomeWorker : WorldGenStep // Technically not a biomeworker, but whatever. Thanks Garthor!
 	{
 		public static ModuleBase PerlinNoise = null;
 		public bool validForPrinting = true;
-		public static Dictionary<Tile, Hilliness> backupHilliness = new Dictionary<Tile, Hilliness>();
+		List<BiomeDef> firstOrderBiomes = new List<BiomeDef>();
+		List<BiomeDef> secondOrderBiomes = new List<BiomeDef>();
+		List<BiomeDef> thirdOrderBiomes = new List<BiomeDef>();
 		public override int SeedPart
 		{
 			get
@@ -202,248 +215,281 @@ namespace BiomesKit
 		}
 		private void BiomesKit()
 		{
-			// Rimworld is kind enough to have a centralized list of all BiomeDefs. Here, we iterate through thouse with the BiomesKit ModExtension.
 			foreach (BiomeDef biomeDef in DefDatabase<BiomeDef>.AllDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
 			{
 				// We then get the modextension from the specific BiomeDef we are iterating through right now.
 				BiomesKitControls biomesKit = biomeDef.GetModExtension<BiomesKitControls>();
-				// South Latitudes need to be negative values. Here we convert them for the user's convenience.
-				float minSouthLatitude = biomesKit.minSouthLatitude * -1;
-				float maxSouthLatitude = biomesKit.maxSouthLatitude * -1;
-				// Now we start iterating through tiles on the world map. This is inside the loop iterating through BiomeDefs.
-				// so this is done for each BiomeDef with the ModExtension.
-				WorldGrid worldGrid = Find.WorldGrid;
-				for (int tileID = 0; tileID < worldGrid.TilesCount; tileID++)
+				switch (biomesKit.biomePriority)
 				{
-					Dictionary<Tile, Hilliness> backupHilliness = LateBiomeWorker.backupHilliness;
-					Tile tile = worldGrid[tileID];
-					if (!backupHilliness.ContainsKey(tile))
-						backupHilliness.Add(tile, tile.hilliness);
-					// Next we find out what latitude the tile is on.
-					float latitude = worldGrid.LongLatOf(tileID).y;
-                    // We set up some perlin values.
-                    int perlinSeed = Find.World.info.Seed;
-                    var coords = worldGrid.GetTileCenter(tileID);
-					// We give ourselves a way to reference the tile that's being checked.
-					// Now we start actually doing something. First up, we respond to the spawnOnBiomes tag.
-					bool validTarget = true; // The tile is a valid target by default.
-                    // We iterate through another list. This time of biomes specified by the tag.
-                    foreach (BiomeDef targetBiome in biomesKit.spawnOnBiomes)
-                    {
-                        // If the BiomeDef matches the tile, we declare the tile a valid target and stop iterating.
-                        if (tile.biome == targetBiome)
-                        {
-                            validTarget = true;
-                            break;
-                        }
-                        // If the BiomeDef doesn't match the tile, we declare the tile an invalid target and move on to the next BiomeDef on the list.
-                        else
-                        {
-                            validTarget = false;
-                        }
-                    }
-                    // After that, if the tile is no longer a valid target, we skip to the next tile.
-                    if (validTarget == false)
-                    {
-                        continue;
-                    }
-                    // Next up is the latitude tags.
-                    bool validSouthLatitude = true; // Southern latitude is valid by default.
-                                                    // If the tile's southern latitude is lesser than the minimum and greater than the maximum, declare the tile's south latitude valid. 
-                                                    // Since southern altitude uses negative numbers, we want it lower than the minimum and higher than the maximum.
-                    if (latitude < minSouthLatitude && latitude > maxSouthLatitude)
-                    {
-                        validSouthLatitude = true;
-                    }
-                    // If the tile's southern latitude is greater than the ninimum and lesser than the maximum, we declare the tile's south latitude invalid.
-                    else
-                    {
-                        validSouthLatitude = false;
-                    }
-                    // Now for the northern latitude.
-                    bool validNorthLatitude = true; // Northern latitude is also valid by default.
-                                                    // If the tile's northern latitude is greater than the minimum and lesser than the maximum, declare the north latitude valid.
-                    if (latitude > biomesKit.minNorthLatitude && latitude < biomesKit.maxNorthLatitude)
-                    {
-                        validNorthLatitude = true;
-                    }
-                    // If the tile's northern latitude is lesser than the minimum and greater than the maximum, declare the northern latitude invalid.
-                    else
-                    {
-                        validNorthLatitude = false;
-                    }
-                    // We check if both the north and the south latitudes are invalid.
-                    if (validNorthLatitude == false && validSouthLatitude == false)
-                    {
-                        // If they are both invalid, we check if every latitude tag has been set by the user.
-                        if (biomesKit.minSouthLatitude != -9999 && biomesKit.minNorthLatitude != -9999 && biomesKit.maxSouthLatitude != -9999 && biomesKit.maxNorthLatitude != 9999)
-                        {
-                            continue; // If not a single latitude tag has been set, we skip to the next tile.
-                        }
-                    }
-                    // If the tile is a water tile and the biome is not allowed on water, we skip to the next tile.
-                    if (tile.WaterCovered && biomesKit.allowOnWater == false)
-                    {
-                        continue;
-                    }
-                    // If the tile is a land tile and the biome is not allowed on land, we skip to the next tile.
-                    if (!tile.WaterCovered && biomesKit.allowOnLand == false)
-                    {
-                        continue;
-                    }
-                    // Does the biome need a river?
-                    if (biomesKit.needRiver == true)
-                    {
-                        // If it does, and the tile doesn't have a river, we skip to the next tile.
-                        if (tile.Rivers == null || tile.Rivers.Count == 0)
-                        {
-                            continue;
-                        }
-                    }
-                    // Now we define the Perlin Noise seed.
-                    // If the user has assigned a custom seed, we use that.
-                    if (biomesKit.perlinCustomSeed != null)
-                    {
-                        perlinSeed = biomesKit.perlinCustomSeed.Value;
-                    }
-                    // If not, we check if they've asked to use the alternative preset seed.
-                    else if (biomesKit.useAlternativePerlinSeedPreset) // If they have, we use that.
-                    {
-                        perlinSeed = tileID;
-                    }
-                    // Are we using perlin for this biome?
-                    if (biomesKit.usePerlin == true)
-                    {
-                        // If we are, it's time to generate our perlin noise.
-                        PerlinNoise = new Perlin(0.1, 10, 0.6, 12, perlinSeed, QualityMode.Low);
-						float perlinNoiseValue = PerlinNoise.GetValue(coords);
-						// And after that we cull the lower perlin values.
-						if (perlinNoiseValue <= (biomesKit.perlinCulling))
-                        {
-                            continue;
-                        }
-                    }
-                    // Compare a random number between 0 and 1 to the userdefined frequency to the power of two divided by ten thousand. I promise it makes sense to do it this way.
-                    if (Rand.Value > (Math.Pow(biomesKit.frequency, 2) / 10000f))
-                    {
-                        continue;
-                    }
-                    // If the tile's elevation is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
-                    if (tile.elevation < biomesKit.minElevation || tile.elevation > biomesKit.maxElevation)
-                    {
-                        continue;
-                    }
-                    // If the tile's temperature is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
-                    if (tile.temperature < biomesKit.minTemperature || tile.temperature > biomesKit.maxTemperature)
-                    {
-                        continue;
-                    }
-                    // If the tile's rainfall is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
-                    if (tile.rainfall < biomesKit.minRainfall || tile.rainfall > biomesKit.maxRainfall)
-                    {
-                        continue;
-                    }
-                    // If the tile's hilliness is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
-                    if (tile.hilliness < biomesKit.minHilliness || tile.hilliness > biomesKit.maxHilliness)
-                    {
-                        continue;
-					}
-					List<int> tmpNeighbors = new List<int>();
-					worldGrid.GetTileNeighbors(tileID, tmpNeighbors);
-					int neighbor = 0;
-					int waterNeighbors = 0;
-					bool enoughWaterNeighbors = true;
-					if (biomesKit.minimumWaterNeighbors > 0)
-					{
-						for (int count = tmpNeighbors.Count; neighbor < count; neighbor++)
-						{
-							if (worldGrid[tmpNeighbors[neighbor]].biome == BiomeDefOf.Ocean)
-							{
-								waterNeighbors += 1;
-								Log.Message("Water Neighbors =" + waterNeighbors);
-							}
-							if (waterNeighbors < biomesKit.minimumWaterNeighbors)
-							{
-								enoughWaterNeighbors = false;
-							}
-							if (waterNeighbors == biomesKit.minimumWaterNeighbors)
-							{
-								enoughWaterNeighbors = true;
-							}
-						}
-					}
-					if (enoughWaterNeighbors == false)
-                    {
-						continue;
-					}
-					int landNeighbors = 0;
-					bool enoughLandNeighbors = true;
-					if (biomesKit.minimumWaterNeighbors > 0)
-					{
-						for (int count = tmpNeighbors.Count; neighbor < count; neighbor++)
-						{
-							if (worldGrid[tmpNeighbors[neighbor]].biome != BiomeDefOf.Ocean)
-							{
-								landNeighbors += 1;
-							}
-							if (waterNeighbors < biomesKit.minimumLandNeighbors)
-							{
-								enoughLandNeighbors = false;
-							}
-							if (waterNeighbors == biomesKit.minimumLandNeighbors)
-							{
-								enoughLandNeighbors = true;
-							}
-						}
-					}
-					if (enoughLandNeighbors == false)
-					{
-						continue;
-					}
-					// If we get this far, we can spawn the biome!
-					if (biomeDef.workerClass.Name == "UniversalBiomeWorker")
-						tile.biome = biomeDef;
-                    // If the user wants to actually change the hilliness of a tile, we handle that here.
-                    if (biomesKit.setHills != null)
-					{
-						int hilliness = (int)biomesKit.setHills;
-						if (biomesKit.spawnHills != null && biomesKit.setHills == null) // convert deprecated tag if modern tag is not used
-						{
-							hilliness = (int)biomesKit.spawnHills;
-							biomesKit.setHills = biomesKit.spawnHills;
-						}
-						if (biomesKit.setHills == BiomesKitControls.BiomesKitHilliness.Random)
-						{
-							// random number from 0 to 3.
-							switch (Rand.Range(0, 3))
-							{
-								case 0: // 0 means flat.
-									tile.hilliness = Hilliness.Flat;
-									break;
-								case 1: // 1 means small hills.
-									tile.hilliness = Hilliness.SmallHills;
-									break;
-								case 2: // 2 means large hills.
-									tile.hilliness = Hilliness.LargeHills;
-									break;
-								case 3: // 3 means mountainous.
-									tile.hilliness = Hilliness.Mountainous;
-									break;
-							}
-						}
-					}
-					if (biomesKit.hillMaterialPath != "World/MapGraphics/Default" && tile.biome.HasModExtension<BiomesKitControls>())
-					{
-						tile.hilliness = Hilliness.Flat;
-					}
-					if (biomesKit.setElevation != null)
-					{
-						tile.elevation = (float)biomesKit.setElevation;
-					}
+					case 1:
+						Log.Message("adding " + biomeDef.defName + "to primary biomes");
+						firstOrderBiomes.Add(biomeDef);
+						break;
+					case 2:
+						Log.Message("adding " + biomeDef.defName + "to secondary biomes");
+						secondOrderBiomes.Add(biomeDef);
+						break;
+					case 3:
+						Log.Message("adding " + biomeDef.defName + "to tertiary biomes");
+						thirdOrderBiomes.Add(biomeDef);
+						break;
+					default:
+						goto case 1;
 				}
 			}
+			foreach (BiomeDef biomeDef in firstOrderBiomes)
+			{
+				Log.Error("running primary biome " + biomeDef);
+				BiomesKitCalcs(biomeDef);
+			}
+			foreach (BiomeDef biomeDef in secondOrderBiomes)
+			{
+				Log.Error("running secondary biome " + biomeDef);
+				BiomesKitCalcs(biomeDef);
+			}
+			foreach (BiomeDef biomeDef in thirdOrderBiomes)
+			{
+				Log.Error("running tertiary biome " + biomeDef);
+				BiomesKitCalcs(biomeDef);
+			}
 		}
-    }
+		private void BiomesKitCalcs(BiomeDef biomeDef)
+		{
+			BiomesKitControls biomesKit = biomeDef.GetModExtension<BiomesKitControls>();
+			// South Latitudes need to be negative values. Here we convert them for the user's convenience.
+			float minSouthLatitude = biomesKit.minSouthLatitude * -1;
+			float maxSouthLatitude = biomesKit.maxSouthLatitude * -1;
+			// Now we start iterating through tiles on the world map. This is inside the loop iterating through BiomeDefs.
+			// so this is done for each BiomeDef with the ModExtension.
+			WorldGrid worldGrid = Find.WorldGrid;
+			for (int tileID = 0; tileID < worldGrid.TilesCount; tileID++)
+			{
+				Tile tile = worldGrid[tileID];
+				// Next we find out what latitude the tile is on.
+				float latitude = worldGrid.LongLatOf(tileID).y;
+				// We set up some perlin values.
+				int perlinSeed = Find.World.info.Seed;
+				var coords = worldGrid.GetTileCenter(tileID);
+				// We give ourselves a way to reference the tile that's being checked.
+				// Now we start actually doing something. First up, we respond to the spawnOnBiomes tag.
+				bool validTarget = true; // The tile is a valid target by default.
+				// We iterate through another list. This time of biomes specified by the tag.
+				foreach (BiomeDef targetBiome in biomesKit.spawnOnBiomes)
+				{
+					// If the BiomeDef matches the tile, we declare the tile a valid target and stop iterating.
+					if (tile.biome == targetBiome)
+					{
+						validTarget = true;
+						break;
+					}
+					// If the BiomeDef doesn't match the tile, we declare the tile an invalid target and move on to the next BiomeDef on the list.
+					else
+					{
+						validTarget = false;
+					}
+				}
+				// After that, if the tile is no longer a valid target, we skip to the next tile.
+				if (validTarget == false)
+				{
+					continue;
+				}
+				// Next up is the latitude tags.
+				bool validSouthLatitude = true; // Southern latitude is valid by default.
+												// If the tile's southern latitude is lesser than the minimum and greater than the maximum, declare the tile's south latitude valid. 
+												// Since southern altitude uses negative numbers, we want it lower than the minimum and higher than the maximum.
+				if (latitude < minSouthLatitude && latitude > maxSouthLatitude)
+				{
+					validSouthLatitude = true;
+				}
+				// If the tile's southern latitude is greater than the ninimum and lesser than the maximum, we declare the tile's south latitude invalid.
+				else
+				{
+					validSouthLatitude = false;
+				}
+				// Now for the northern latitude.
+				bool validNorthLatitude = true; // Northern latitude is also valid by default.
+												// If the tile's northern latitude is greater than the minimum and lesser than the maximum, declare the north latitude valid.
+				if (latitude > biomesKit.minNorthLatitude && latitude < biomesKit.maxNorthLatitude)
+				{
+					validNorthLatitude = true;
+				}
+				// If the tile's northern latitude is lesser than the minimum and greater than the maximum, declare the northern latitude invalid.
+				else
+				{
+					validNorthLatitude = false;
+				}
+				// We check if both the north and the south latitudes are invalid.
+				if (validNorthLatitude == false && validSouthLatitude == false)
+				{
+					// If they are both invalid, we check if every latitude tag has been set by the user.
+					if (biomesKit.minSouthLatitude != -9999 && biomesKit.minNorthLatitude != -9999 && biomesKit.maxSouthLatitude != -9999 && biomesKit.maxNorthLatitude != 9999)
+					{
+						continue; // If not a single latitude tag has been set, we skip to the next tile.
+					}
+				}
+				// If the tile is a water tile and the biome is not allowed on water, we skip to the next tile.
+				if (tile.WaterCovered && biomesKit.allowOnWater == false)
+				{
+					continue;
+				}
+				// If the tile is a land tile and the biome is not allowed on land, we skip to the next tile.
+				if (!tile.WaterCovered && biomesKit.allowOnLand == false)
+				{
+					continue;
+				}
+				// Does the biome need a river?
+				if (biomesKit.needRiver == true)
+				{
+					// If it does, and the tile doesn't have a river, we skip to the next tile.
+					if (tile.Rivers == null || tile.Rivers.Count == 0)
+					{
+						continue;
+					}
+				}
+				// Now we define the Perlin Noise seed.
+				// If the user has assigned a custom seed, we use that.
+				if (biomesKit.perlinCustomSeed != null)
+				{
+					perlinSeed = biomesKit.perlinCustomSeed.Value;
+				}
+				// If not, we check if they've asked to use the alternative preset seed.
+				else if (biomesKit.useAlternativePerlinSeedPreset) // If they have, we use that.
+				{
+					perlinSeed = tileID;
+				}
+				// Are we using perlin for this biome?
+				if (biomesKit.usePerlin == true)
+				{
+					// If we are, it's time to generate our perlin noise.
+					PerlinNoise = new Perlin(0.1, 10, 0.6, 12, perlinSeed, QualityMode.Low);
+					float perlinNoiseValue = PerlinNoise.GetValue(coords);
+					// And after that we cull the lower perlin values.
+					if (perlinNoiseValue <= (biomesKit.perlinCulling))
+					{
+						continue;
+					}
+				}
+				// Compare a random number between 0 and 1 to the userdefined frequency to the power of two divided by ten thousand. I promise it makes sense to do it this way.
+				if (Rand.Value > (Math.Pow(biomesKit.frequency, 2) / 10000f))
+				{
+					continue;
+				}
+				// If the tile's elevation is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
+				if (tile.elevation < biomesKit.minElevation || tile.elevation > biomesKit.maxElevation)
+				{
+					continue;
+				}
+				// If the tile's temperature is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
+				if (tile.temperature < biomesKit.minTemperature || tile.temperature > biomesKit.maxTemperature)
+				{
+					continue;
+				}
+				// If the tile's rainfall is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
+				if (tile.rainfall < biomesKit.minRainfall || tile.rainfall > biomesKit.maxRainfall)
+				{
+					continue;
+				}
+				// If the tile's hilliness is higher is lower than the minimum or higher than the maximum, we skip to the next tile.
+				if (tile.hilliness < biomesKit.minHilliness || tile.hilliness > biomesKit.maxHilliness)
+				{
+					continue;
+				}
+				List<int> tmpNeighbors = new List<int>();
+				worldGrid.GetTileNeighbors(tileID, tmpNeighbors);
+				int neighbor = 0;
+				int waterNeighbors = 0;
+				bool enoughWaterNeighbors = true;
+				if (biomesKit.minimumWaterNeighbors > 0)
+				{
+					for (int count = tmpNeighbors.Count; neighbor < count; neighbor++)
+					{
+						if (worldGrid[tmpNeighbors[neighbor]].biome == BiomeDefOf.Ocean)
+						{
+							waterNeighbors += 1;
+							Log.Message("Water Neighbors =" + waterNeighbors);
+						}
+						if (waterNeighbors < biomesKit.minimumWaterNeighbors)
+						{
+							enoughWaterNeighbors = false;
+						}
+						if (waterNeighbors == biomesKit.minimumWaterNeighbors)
+						{
+							enoughWaterNeighbors = true;
+						}
+					}
+				}
+				if (enoughWaterNeighbors == false)
+				{
+					continue;
+				}
+				int landNeighbors = 0;
+				bool enoughLandNeighbors = true;
+				if (biomesKit.minimumWaterNeighbors > 0)
+				{
+					for (int count = tmpNeighbors.Count; neighbor < count; neighbor++)
+					{
+						if (worldGrid[tmpNeighbors[neighbor]].biome != BiomeDefOf.Ocean)
+						{
+							landNeighbors += 1;
+						}
+						if (waterNeighbors < biomesKit.minimumLandNeighbors)
+						{
+							enoughLandNeighbors = false;
+						}
+						if (waterNeighbors == biomesKit.minimumLandNeighbors)
+						{
+							enoughLandNeighbors = true;
+						}
+					}
+				}
+				if (enoughLandNeighbors == false)
+				{
+					continue;
+				}
+				// If we get this far, we can spawn the biome!
+				if (biomeDef.workerClass.Name == "UniversalBiomeWorker")
+					tile.biome = biomeDef;
+				// If the user wants to actually change the hilliness of a tile, we handle that here.
+				if (biomesKit.setHills != null)
+				{
+					int hilliness = (int)biomesKit.setHills;
+					if (biomesKit.spawnHills != null && biomesKit.setHills == null) // convert deprecated tag if modern tag is not used
+					{
+						hilliness = (int)biomesKit.spawnHills;
+						biomesKit.setHills = biomesKit.spawnHills;
+					}
+					if (biomesKit.setHills == BiomesKitHilliness.Random)
+					{
+						// random number from 0 to 3.
+						switch (Rand.Range(0, 3))
+						{
+							case 0: // 0 means flat.
+								tile.hilliness = Hilliness.Flat;
+								break;
+							case 1: // 1 means small hills.
+								tile.hilliness = Hilliness.SmallHills;
+								break;
+							case 2: // 2 means large hills.
+								tile.hilliness = Hilliness.LargeHills;
+								break;
+							case 3: // 3 means mountainous.
+								tile.hilliness = Hilliness.Mountainous;
+								break;
+						}
+					}
+					else if (biomesKit.setHills < BiomesKitHilliness.Random)
+					{
+						tile.hilliness = (Hilliness)biomesKit.setHills;
+					}
+				}
+				if (biomesKit.setElevation != null)
+				{
+					tile.elevation = (float)biomesKit.setElevation;
+				}
+			}
+			Log.Message("finished biome cycle");
+		}
+	}
 
 	public class BiomesKitWorldLayer : WorldLayer // Let's paint some worldmaterials.
 	{
@@ -462,77 +508,86 @@ namespace BiomesKit
 				Tile tile = Find.WorldGrid[tileID];
 				if (tile.biome.HasModExtension<BiomesKitControls>())
 				{
-					Dictionary<Tile, Hilliness> backupHilliness = LateBiomeWorker.backupHilliness;
+					bool noRoad = tile.Roads.NullOrEmpty();
+					bool noRiver = tile.Rivers.NullOrEmpty();
 					BiomesKitControls biomesKit = tile.biome.GetModExtension<BiomesKitControls>();
 					Vector3 vector = worldGrid.GetTileCenter(tileID);
-					if (biomesKit.hillMaterialPath != "World/MapGraphics/Default")
+					if (biomesKit.uniqueHills)
 					{
-						tile.hilliness = backupHilliness[tile];
-						Material hill;
-						if (tile.hilliness == Hilliness.SmallHills)
+						Dictionary<Tile, Hilliness> backupHilliness = Dictionaries.backupHilliness;
+						Dictionary<Tile, Hilliness> tileRestored = Dictionaries.tileRestored;
+						if (noRiver && noRoad)
 						{
-							hill = MaterialPool.MatFrom(biomesKit.hillMaterialPath + "/Hills/SmallHills", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-							LayerSubMesh subMeshHill = GetSubMesh(hill);
-							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * 1.5f), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
-							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
-						}
-						if (tile.hilliness == Hilliness.LargeHills)
-						{
-							hill = MaterialPool.MatFrom(biomesKit.hillMaterialPath + "/Hills/LargeHills", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-							LayerSubMesh subMeshHill = GetSubMesh(hill);
-							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * 1.5f), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
-							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
-						}
-						if (tile.hilliness == Hilliness.Mountainous)
-						{
-							hill = MaterialPool.MatFrom(biomesKit.hillMaterialPath + "/Hills/Mountains", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-							LayerSubMesh subMeshHill = GetSubMesh(hill);
-							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * 1.5f), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
-							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
-						}
-						if (tile.hilliness == Hilliness.Impassable)
-						{
-							hill = MaterialPool.MatFrom(biomesKit.hillMaterialPath + "/Hills/Impassable", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-							LayerSubMesh subMeshHill = GetSubMesh(hill);
-							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * 1.5f), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
-							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
-						}
+							Material hillMaterial;
+							string hillPath = "WorldMaterials/BiomesKit/" + tile.biome.defName + "/Hills/";
+							bool canBeSnowy = false;
+							switch (tile.hilliness)
+							{
+								case Hilliness.Flat:
+									hillPath = null;
+									break;
+								case Hilliness.SmallHills:
+									hillPath += "SmallHills";
+									break;
+								case Hilliness.LargeHills:
+									hillPath += "LargeHills";
+									break;
+								case Hilliness.Mountainous:
+									hillPath += "Mountains";
+									canBeSnowy = true;
+									break;
+								case Hilliness.Impassable:
+									hillPath += "Impassable";
+									canBeSnowy = true;
+									break;
 
-					}
-					if (biomesKit.materialMaxHilliness != Hilliness.Undefined)
-						if (tile.hilliness > biomesKit.materialMaxHilliness || tile.hilliness < biomesKit.materialMinHilliness)
-							continue;
-					bool roadPresent = true;
-					if (tile.Roads == null || tile.Roads.Count == 0)
-						roadPresent = false;
-					bool riverPresent = true;
-					if (tile.Rivers == null || tile.Rivers.Count == 0)
-						riverPresent = false;
-					if (biomesKit.forestMaterialPath != "World/MapGraphics/Default")
-					{
-						if (!riverPresent && !roadPresent)
-						{
-							Material forestMaterial;
-							if (tile.temperature < biomesKit.forestSnowyBelow)
-							{
-								forestMaterial = MaterialPool.MatFrom(biomesKit.forestMaterialPath + "/Forest_Snowy", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
 							}
-							else if (tile.rainfall < biomesKit.forestSparseBelow)
+							if (hillPath != null)
 							{
-								forestMaterial = MaterialPool.MatFrom(biomesKit.forestMaterialPath + "/Forest_Sparse", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+								if (canBeSnowy == true)
+								{
+									switch (tile.temperature)
+									{
+										case float temp when temp < biomesKit.forestSnowyBelow:
+											hillPath += "_Snowy";
+											break;
+									}
+								}
+								hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+								LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
+								WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.impassableSizeMultiplier), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
+								WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
 							}
-							else if (tile.rainfall > biomesKit.forestDenseAbove)
-							{
-								forestMaterial = MaterialPool.MatFrom(biomesKit.forestMaterialPath + "/Forest_Dense", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-							}
-							else
-							{
-								forestMaterial = MaterialPool.MatFrom(biomesKit.forestMaterialPath + "/Forest", ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-							}
-							LayerSubMesh subMeshForest = GetSubMesh(forestMaterial);
-							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.materialSizeMultiplier), 0.01f, subMeshForest, false, biomesKit.materialRandomRotation, false);
-							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshForest);
 						}
+					}
+					if (biomesKit.forested && tile.hilliness == Hilliness.Flat && noRiver && noRoad)
+					{
+						string forestPath = "WorldMaterials/BiomesKit/" + tile.biome.defName + "/Forest/Forest_";
+						bool pathHasChanged = false;
+						switch (tile.temperature)
+                        {
+							case float temp when temp < biomesKit.forestSnowyBelow:
+								forestPath += "Snowy";
+								pathHasChanged = true;
+								break;
+						}
+						switch (tile.rainfall)
+						{
+							case float rain when rain < biomesKit.forestSparseBelow:
+								forestPath += "Sparse";
+								pathHasChanged = true;
+								break;
+							case float rain when rain > biomesKit.forestDenseAbove:
+								forestPath += "Dense";
+								pathHasChanged = true;
+								break;
+						}
+						if (!pathHasChanged)
+							forestPath = forestPath.Remove(forestPath.Length - 1, 1);
+						Material forestMaterial = MaterialPool.MatFrom(forestPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+						LayerSubMesh subMeshForest = GetSubMesh(forestMaterial);
+						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.materialSizeMultiplier), 0.01f, subMeshForest, false, biomesKit.materialRandomRotation, false);
+						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshForest);
 					}
 					if (biomesKit.materialPath != "World/MapGraphics/Default")
 					{

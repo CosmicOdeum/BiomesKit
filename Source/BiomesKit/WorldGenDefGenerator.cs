@@ -16,7 +16,7 @@ namespace BiomesKit
             WorldGenStepDef biomesKitWorldGenStep = new WorldGenStepDef
             {
                 defName = "BiomesKitWorldGenStep",
-                order = 211,
+                order = 999,
                 worldGenStep = new BiomesKit.LateBiomeWorker()
 
             };
