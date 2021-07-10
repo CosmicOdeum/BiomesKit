@@ -45,59 +45,6 @@ namespace BiomesKit
 		}
 	}
 
-	public class BiomesKitControls : DefModExtension
-	{
-		public List<BiomeDef> spawnOnBiomes = new List<BiomeDef>();
-		public int? biomePriority;
-		public string materialPath = "World/MapGraphics/Default";
-		public bool forested = false;
-		public bool uniqueHills = false;
-		public float forestSnowyBelow = -9999;
-		public float forestSparseBelow = -9999;
-		public float forestDenseAbove = 9999;
-		public int materialLayer = 3515;
-		public float smallHillSizeMultiplier = 1.5f;
-		public float largeHillSizeMultiplier = 2f;
-		public float mountainSizeMultiplier = 1.4f;
-		public float impassableSizeMultiplier = 1.3f;
-		public float materialSizeMultiplier = 1;
-		public float materialOffset = 1f;
-		public bool materialRandomRotation = true;
-		public Hilliness materialMinHilliness;
-		public Hilliness materialMaxHilliness;
-		public bool allowOnWater = false;
-		public bool allowOnLand = true;
-		public bool setNotWaterCovered = false;
-		public int minimumWaterNeighbors = 0;
-		public int minimumLandNeighbors = 0;
-		public bool needRiver = false;
-		public bool randomizeHilliness = false;
-		public float minTemperature = -999;
-		public float maxTemperature = 999;
-		public float minElevation = -9999;
-		public float maxElevation = 9999;
-		public float? setElevation;
-		public float minNorthLatitude = -9999;
-		public float maxNorthLatitude = -9999;
-		public float minSouthLatitude = -9999;
-		public float maxSouthLatitude = -9999;
-		public Hilliness minHilliness = Hilliness.Flat;
-		public Hilliness maxHilliness = Hilliness.Impassable;
-		public BiomesKitHilliness? spawnHills = null;
-		public BiomesKitHilliness? setHills = null;
-		public float minRainfall = -9999;
-		public float maxRainfall = 9999;
-		public int frequency = 100;
-		public bool useAlternativePerlinSeedPreset = false;
-		public bool usePerlin = false;
-		public int? perlinCustomSeed = null;
-		public float perlinCulling = 0.99f;
-		public double perlinFrequency;
-		public double perlinLacunarity;
-		public double perlinPersistence;
-		public int perlinOctaves;
-	}
-
 
 	public class UniversalBiomeWorker : BiomeWorker
 	{
@@ -239,17 +186,14 @@ namespace BiomesKit
 			}
 			foreach (BiomeDef biomeDef in firstOrderBiomes)
 			{
-				Log.Error("running primary biome " + biomeDef);
 				BiomesKitCalcs(biomeDef);
 			}
 			foreach (BiomeDef biomeDef in secondOrderBiomes)
 			{
-				Log.Error("running secondary biome " + biomeDef);
 				BiomesKitCalcs(biomeDef);
 			}
 			foreach (BiomeDef biomeDef in thirdOrderBiomes)
 			{
-				Log.Error("running tertiary biome " + biomeDef);
 				BiomesKitCalcs(biomeDef);
 			}
 		}
@@ -370,7 +314,7 @@ namespace BiomesKit
 					}
 				}
 				// Compare a random number between 0 and 1 to the userdefined frequency to the power of two divided by ten thousand. I promise it makes sense to do it this way.
-				if (Rand.Value > (Math.Pow(biomesKit.frequency, 2) / 10000f))
+				if (Rand.Value > (System.Math.Pow(biomesKit.frequency, 2) / 10000f))
 				{
 					continue;
 				}
@@ -461,18 +405,18 @@ namespace BiomesKit
 					if (biomesKit.setHills == BiomesKitHilliness.Random)
 					{
 						// random number from 0 to 3.
-						switch (Rand.Range(0, 3))
+						switch (Rand.Range((int)biomesKit.minRandomHills, (int)biomesKit.maxRandomHills))
 						{
-							case 0: // 0 means flat.
+							case 1: // 0 means flat.
 								tile.hilliness = Hilliness.Flat;
 								break;
-							case 1: // 1 means small hills.
+							case 2: // 1 means small hills.
 								tile.hilliness = Hilliness.SmallHills;
 								break;
-							case 2: // 2 means large hills.
+							case 3: // 2 means large hills.
 								tile.hilliness = Hilliness.LargeHills;
 								break;
-							case 3: // 3 means mountainous.
+							case 4: // 3 means mountainous.
 								tile.hilliness = Hilliness.Mountainous;
 								break;
 						}
@@ -488,119 +432,6 @@ namespace BiomesKit
 				}
 			}
 			Log.Message("finished biome cycle");
-		}
-	}
-
-	public class BiomesKitWorldLayer : WorldLayer // Let's paint some worldmaterials.
-	{
-		private static readonly IntVec2 TexturesInAtlas = new IntVec2(2, 2); // two by two, meaning four variants for each worldmaterial.
-		public override IEnumerable Regenerate()
-		{
-			foreach (object obj in base.Regenerate())
-			{
-				yield return obj;
-			}
-			Rand.PushState();
-			Rand.Seed = Find.World.info.Seed;
-			WorldGrid worldGrid = Find.WorldGrid;
-			for (int tileID = 0; tileID < Find.WorldGrid.TilesCount; tileID++)
-			{
-				Tile tile = Find.WorldGrid[tileID];
-				if (tile.biome.HasModExtension<BiomesKitControls>())
-				{
-					bool noRoad = tile.Roads.NullOrEmpty();
-					bool noRiver = tile.Rivers.NullOrEmpty();
-					BiomesKitControls biomesKit = tile.biome.GetModExtension<BiomesKitControls>();
-					Vector3 vector = worldGrid.GetTileCenter(tileID);
-					if (biomesKit.uniqueHills)
-					{
-						Dictionary<Tile, Hilliness> backupHilliness = Dictionaries.backupHilliness;
-						Dictionary<Tile, Hilliness> tileRestored = Dictionaries.tileRestored;
-						if (noRiver && noRoad)
-						{
-							Material hillMaterial;
-							string hillPath = "WorldMaterials/BiomesKit/" + tile.biome.defName + "/Hills/";
-							bool canBeSnowy = false;
-							switch (tile.hilliness)
-							{
-								case Hilliness.Flat:
-									hillPath = null;
-									break;
-								case Hilliness.SmallHills:
-									hillPath += "SmallHills";
-									break;
-								case Hilliness.LargeHills:
-									hillPath += "LargeHills";
-									break;
-								case Hilliness.Mountainous:
-									hillPath += "Mountains";
-									canBeSnowy = true;
-									break;
-								case Hilliness.Impassable:
-									hillPath += "Impassable";
-									canBeSnowy = true;
-									break;
-
-							}
-							if (hillPath != null)
-							{
-								if (canBeSnowy == true)
-								{
-									switch (tile.temperature)
-									{
-										case float temp when temp < biomesKit.forestSnowyBelow:
-											hillPath += "_Snowy";
-											break;
-									}
-								}
-								hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-								LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
-								WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.impassableSizeMultiplier), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
-								WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
-							}
-						}
-					}
-					if (biomesKit.forested && tile.hilliness == Hilliness.Flat && noRiver && noRoad)
-					{
-						string forestPath = "WorldMaterials/BiomesKit/" + tile.biome.defName + "/Forest/Forest_";
-						bool pathHasChanged = false;
-						switch (tile.temperature)
-                        {
-							case float temp when temp < biomesKit.forestSnowyBelow:
-								forestPath += "Snowy";
-								pathHasChanged = true;
-								break;
-						}
-						switch (tile.rainfall)
-						{
-							case float rain when rain < biomesKit.forestSparseBelow:
-								forestPath += "Sparse";
-								pathHasChanged = true;
-								break;
-							case float rain when rain > biomesKit.forestDenseAbove:
-								forestPath += "Dense";
-								pathHasChanged = true;
-								break;
-						}
-						if (!pathHasChanged)
-							forestPath = forestPath.Remove(forestPath.Length - 1, 1);
-						Material forestMaterial = MaterialPool.MatFrom(forestPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-						LayerSubMesh subMeshForest = GetSubMesh(forestMaterial);
-						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.materialSizeMultiplier), 0.01f, subMeshForest, false, biomesKit.materialRandomRotation, false);
-						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshForest);
-					}
-					if (biomesKit.materialPath != "World/MapGraphics/Default")
-					{
-						Material material = MaterialPool.MatFrom(biomesKit.materialPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-						LayerSubMesh subMesh = GetSubMesh(material);
-						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.materialSizeMultiplier), 0.01f, subMesh, false, biomesKit.materialRandomRotation, false);
-						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMesh);
-					}
-				}
-			}
-			Rand.PopState();
-			base.FinalizeMesh(MeshParts.All);
-			yield break;
 		}
 	}
 }
