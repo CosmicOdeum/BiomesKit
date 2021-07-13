@@ -22,7 +22,4 @@ namespace BiomesKitPatches
             AccessTools.Field(typeof(WorldMaterials), nameof(WorldMaterials.ImpassableMountains)).SetValue(null, noMaterial);
         }
     }
-
-
-
 }

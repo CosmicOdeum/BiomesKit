@@ -52,9 +52,13 @@ namespace BiomesKit
 		public BiomesKitHilliness? setHills = null;
 		public BiomesKitHilliness? minRandomHills = BiomesKitHilliness.Flat;
 		public BiomesKitHilliness? maxRandomHills = BiomesKitHilliness.Mountainous;
-		public float hillSemiSnowyBelow = -9999;
-		public float hillSnowyBelow = -9999;
-		public float hillExtraSnowyBelow = -9999;
+		public float snowpilesBelow = -9999;
+		public float mountainsSemiSnowyBelow = -9999;
+		public float mountainsSnowyBelow = -9999;
+		public float mountainsFullySnowyBelow = -9999;
+		public float impassableSemiSnowyBelow = -9999;
+		public float impassableSnowyBelow = -9999;
+		public float impassableFullySnowyBelow = -9999;
 		public float minRainfall = -9999;
 		public float maxRainfall = 9999;
 		public int frequency = 100;

@@ -35,74 +35,49 @@ namespace BiomesKit
 					Vector3 vector = worldGrid.GetTileCenter(tileID);
 					if (biomesKit.uniqueHills)
 					{
-						Dictionary<Tile, Hilliness> backupHilliness = Dictionaries.backupHilliness;
-						Dictionary<Tile, Hilliness> tileRestored = Dictionaries.tileRestored;
 						if (noRiver && noRoad)
 						{
 							Material hillMaterial;
 							string hillPath = "WorldMaterials/BiomesKit/" + tile.biome.defName + "/Hills/";
-							bool canBeSemiSnowy = false;
-							bool canBeSnowy = false;
-							bool canBeExtraSnowy = false;
                             switch (tile.hilliness)
                             {
                                 case Hilliness.Flat:
                                     hillPath = null;
                                     break;
                                 case Hilliness.SmallHills:
-                                    hillPath += "SmallHills";
-                                    canBeExtraSnowy = true;
+									if (tile.temperature < biomesKit.snowpilesBelow)
+										hillPath += "SmallSnowpiles";
+									else
+										hillPath += "SmallHills";
                                     break;
                                 case Hilliness.LargeHills:
-                                    hillPath += "LargeHills";
-                                    canBeExtraSnowy = true;
-                                    break;
+									if (tile.temperature < biomesKit.snowpilesBelow)
+										hillPath += "LargeSnowpiles";
+									else
+										hillPath += "LargeHills";
+									break;
                                 case Hilliness.Mountainous:
                                     hillPath += "Mountains";
-                                    canBeSemiSnowy = true;
-                                    canBeSnowy = true;
-                                    canBeExtraSnowy = true;
-                                    break;
+									if (tile.temperature < biomesKit.mountainsFullySnowyBelow)
+										hillPath += "_FullySnowy";
+									else if (tile.temperature < biomesKit.mountainsSnowyBelow)
+										hillPath += "_Snowy";
+									else if (tile.temperature < biomesKit.mountainsSemiSnowyBelow)
+										hillPath += "_SemiSnowy";
+									break;
                                 case Hilliness.Impassable:
                                     hillPath += "Impassable";
-                                    canBeSemiSnowy = true;
-                                    canBeSnowy = true;
-                                    canBeExtraSnowy = true;
-                                    break;
+									if (tile.temperature < biomesKit.impassableFullySnowyBelow)
+										hillPath += "_FullySnowy";
+									else if (tile.temperature < biomesKit.impassableSnowyBelow)
+										hillPath += "_Snowy";
+									else if (tile.temperature < biomesKit.impassableSemiSnowyBelow)
+										hillPath += "_SemiSnowy";
+									break;
 
-                            }
-                            if (hillPath != null)
+							}
+							if (hillPath != null)
 							{
-                                if (canBeExtraSnowy == true)
-                                {
-                                    switch (tile.temperature)
-                                    {
-                                        case float temp when temp < biomesKit.hillExtraSnowyBelow:
-                                            hillPath += "_ExtraSnowy";
-                                            canBeSemiSnowy = false;
-                                            canBeSnowy = false;
-                                            break;
-                                    }
-                                }
-                                if (canBeSnowy == true)
-                                {
-                                    switch (tile.temperature)
-                                    {
-                                        case float temp when temp < biomesKit.hillSnowyBelow:
-                                            hillPath += "_Snowy";
-                                            canBeSemiSnowy = false;
-                                            break;
-                                    }
-                                }
-                                if (canBeSemiSnowy == true)
-                                {
-                                    switch (tile.temperature)
-                                    {
-                                        case float temp when temp < biomesKit.hillSemiSnowyBelow:
-                                            hillPath += "_SemiSnowy";
-                                            break;
-                                    }
-                                }
                                 hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
 								LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
 								WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.impassableSizeMultiplier), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);

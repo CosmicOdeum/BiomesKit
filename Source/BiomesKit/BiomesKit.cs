@@ -54,11 +54,6 @@ namespace BiomesKit
 		}
 	}
 
-	public static class Dictionaries
-	{
-		public static Dictionary<Tile, Hilliness> backupHilliness = new Dictionary<Tile, Hilliness>();
-		public static Dictionary<Tile, Hilliness> tileRestored = new Dictionary<Tile, Hilliness>();
-	}
 
 	public enum BiomesKitHilliness
 	{
