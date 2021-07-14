@@ -55,9 +55,11 @@ namespace BiomesKit
 		public float snowpilesBelow = -9999;
 		public float mountainsSemiSnowyBelow = -9999;
 		public float mountainsSnowyBelow = -9999;
+		public float mountainsVerySnowyBelow = -9999;
 		public float mountainsFullySnowyBelow = -9999;
 		public float impassableSemiSnowyBelow = -9999;
 		public float impassableSnowyBelow = -9999;
+		public float impassableVerySnowyBelow = -9999;
 		public float impassableFullySnowyBelow = -9999;
 		public float minRainfall = -9999;
 		public float maxRainfall = 9999;
