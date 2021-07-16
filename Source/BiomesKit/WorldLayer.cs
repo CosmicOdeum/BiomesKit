@@ -27,48 +27,62 @@ namespace BiomesKit
 			for (int tileID = 0; tileID < Find.WorldGrid.TilesCount; tileID++)
 			{
 				Tile tile = Find.WorldGrid[tileID];
+				Vector3 vector = worldGrid.GetTileCenter(tileID);
 				if (tile.biome.HasModExtension<BiomesKitControls>())
 				{
 					bool noRoad = tile.Roads.NullOrEmpty();
 					bool noRiver = tile.Rivers.NullOrEmpty();
 					BiomesKitControls biomesKit = tile.biome.GetModExtension<BiomesKitControls>();
-					Vector3 vector = worldGrid.GetTileCenter(tileID);
 					if (biomesKit.uniqueHills)
 					{
 						if (noRiver && noRoad)
 						{
 							Material hillMaterial;
 							string hillPath = "WorldMaterials/BiomesKit/" + tile.biome.defName + "/Hills/";
-                            switch (tile.hilliness)
-                            {
-                                case Hilliness.Flat:
-                                    hillPath = null;
-                                    break;
-                                case Hilliness.SmallHills:
+							float sizeMultiplier = 0;
+							FloatRange sizeRange;
+							switch (tile.hilliness)
+							{
+								case Hilliness.Flat:
+									hillPath = null;
+									break;
+								case Hilliness.SmallHills:
+									sizeRange = new FloatRange(biomesKit.smallHillSizeMultiplier - 0.1f, biomesKit.smallHillSizeMultiplier + 0.1f);
+									sizeMultiplier = sizeRange.RandomInRange;
 									if (tile.temperature < biomesKit.snowpilesBelow)
 										hillPath += "SmallSnowpiles";
 									else
 										hillPath += "SmallHills";
-                                    break;
-                                case Hilliness.LargeHills:
+									break;
+								case Hilliness.LargeHills:
+									sizeRange = new FloatRange(biomesKit.largeHillSizeMultiplier - 0.1f, biomesKit.largeHillSizeMultiplier + 0.1f);
+									sizeMultiplier = sizeRange.RandomInRange;
 									if (tile.temperature < biomesKit.snowpilesBelow)
 										hillPath += "LargeSnowpiles";
 									else
 										hillPath += "LargeHills";
 									break;
-                                case Hilliness.Mountainous:
-                                    hillPath += "Mountains";
+								case Hilliness.Mountainous:
+									sizeRange = new FloatRange(biomesKit.mountainSizeMultiplier - 0.1f, biomesKit.mountainSizeMultiplier + 0.1f);
+									sizeMultiplier = sizeRange.RandomInRange;
+									hillPath += "Mountains";
 									if (tile.temperature < biomesKit.mountainsFullySnowyBelow)
 										hillPath += "_FullySnowy";
+									else if (tile.temperature < biomesKit.mountainsVerySnowyBelow)
+										hillPath += "_VerySnowy";
 									else if (tile.temperature < biomesKit.mountainsSnowyBelow)
 										hillPath += "_Snowy";
 									else if (tile.temperature < biomesKit.mountainsSemiSnowyBelow)
 										hillPath += "_SemiSnowy";
 									break;
-                                case Hilliness.Impassable:
-                                    hillPath += "Impassable";
+								case Hilliness.Impassable:
+									sizeRange = new FloatRange(biomesKit.impassableSizeMultiplier - 0.1f, biomesKit.impassableSizeMultiplier + 0.1f);
+									sizeMultiplier = sizeRange.RandomInRange;
+									hillPath += "Impassable";
 									if (tile.temperature < biomesKit.impassableFullySnowyBelow)
 										hillPath += "_FullySnowy";
+									else if (tile.temperature < biomesKit.impassableVerySnowyBelow)
+										hillPath += "_VerySnowy";
 									else if (tile.temperature < biomesKit.impassableSnowyBelow)
 										hillPath += "_Snowy";
 									else if (tile.temperature < biomesKit.impassableSemiSnowyBelow)
@@ -78,12 +92,40 @@ namespace BiomesKit
 							}
 							if (hillPath != null)
 							{
-                                hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+								hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
 								LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
-								WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.impassableSizeMultiplier), 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
+								WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, worldGrid.averageTileSize * sizeMultiplier, 0.01f, subMeshHill, false, biomesKit.materialRandomRotation, false);
 								WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
 							}
 						}
+					}
+					else
+					{
+						Material hillMaterial;
+						string hillPath = "WorldMaterials/BiomesKit/Default/Hills/";
+						switch (tile.hilliness)
+						{
+							case Hilliness.Flat:
+								hillPath = "Transparent";
+								break;
+							case Hilliness.SmallHills:
+								hillPath += "SmallHills";
+								break;
+							case Hilliness.LargeHills:
+								hillPath += "LargeHills";
+								break;
+							case Hilliness.Mountainous:
+								hillPath += "Mountains";
+								break;
+							case Hilliness.Impassable:
+								hillPath += "Impassable";
+								break;
+						}
+						hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+						LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
+						FloatRange BaseSizeRange = new FloatRange(0.9f, 1.1f);
+						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, BaseSizeRange.RandomInRange * worldGrid.averageTileSize, 0.005f, subMeshHill, counterClockwise: false, randomizeRotation: true, printUVs: false);
+						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
 					}
 					if (biomesKit.forested && tile.hilliness == Hilliness.Flat && noRiver && noRoad)
 					{
@@ -121,6 +163,34 @@ namespace BiomesKit
 						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, (worldGrid.averageTileSize * biomesKit.materialSizeMultiplier), 0.01f, subMesh, false, biomesKit.materialRandomRotation, false);
 						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMesh);
 					}
+				}
+				else
+				{
+					Material hillMaterial;
+					string hillPath = "WorldMaterials/BiomesKit/Default/Hills/";
+					switch (tile.hilliness)
+					{
+						case Hilliness.Flat:
+							hillPath = "Transparent";
+							break;
+						case Hilliness.SmallHills:
+							hillPath += "SmallHills";
+							break;
+						case Hilliness.LargeHills:
+							hillPath += "LargeHills";
+							break;
+						case Hilliness.Mountainous:
+							hillPath += "Mountains";
+							break;
+						case Hilliness.Impassable:
+							hillPath += "Impassable";
+							break;
+					}
+					hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, 3510);
+					LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
+					FloatRange BaseSizeRange = new FloatRange(0.9f, 1.1f);
+					WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, BaseSizeRange.RandomInRange * worldGrid.averageTileSize, 0.005f, subMeshHill, counterClockwise: false, randomizeRotation: true, printUVs: false);
+					WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
 				}
 			}
 			Rand.PopState();

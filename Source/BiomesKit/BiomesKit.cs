@@ -34,7 +34,7 @@ namespace BiomesKit
 					if (newAssemblyName.Name == DLLName && newAssemblyName.Version > laterVersion)
 					{
 						laterVersion = newAssemblyName.Version;
-						Log.Error(String.Format("BiomesKit load order error detected. {0} is loading an older version {1} before {2} loads version {3}. Please put {2} above {0} in the mod list.",
+						Log.Error(String.Format("<color=cyan>Incorrect load order:</color> BiomesKit load order error detected. {0} is loading an older version {1} before {2} loads version {3}. Please put {2} above {0} in the mod list.",
 							content.Name, loadedVersion, mod.Name, laterVersion));
 					}
 				}
