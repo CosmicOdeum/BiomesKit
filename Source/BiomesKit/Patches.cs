@@ -18,8 +18,7 @@ namespace BiomesKitPatches
         {
             foreach (BiomeDef biomeDef in DefDatabase<BiomeDef>.AllDefsListForReading.Where(x => x.HasModExtension<BiomesKitControls>()))
             {
-                BiomesKitControls biomesKit = biomeDef.GetModExtension<BiomesKitControls>();
-                if ( biomesKit.uniqueHills)
+                if (ModsConfig.IsActive("Odeum.WMBP"))
                 {
                     Material noMaterial = MaterialPool.MatFrom("Transparent", ShaderDatabase.WorldOverlayTransparentLit, 3510);
                     AccessTools.Field(typeof(WorldMaterials), nameof(WorldMaterials.SmallHills)).SetValue(null, noMaterial);

@@ -99,14 +99,14 @@ namespace BiomesKit
 							}
 						}
 					}
-					else
+					else if (!tile.WaterCovered && ModsConfig.IsActive("Odeum.WMBP"))
 					{
 						Material hillMaterial;
 						string hillPath = "WorldMaterials/BiomesKit/Default/Hills/";
 						switch (tile.hilliness)
 						{
 							case Hilliness.Flat:
-								hillPath = "Transparent";
+								hillPath = null;
 								break;
 							case Hilliness.SmallHills:
 								hillPath += "SmallHills";
@@ -121,11 +121,14 @@ namespace BiomesKit
 								hillPath += "Impassable";
 								break;
 						}
-						hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
-						LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
-						FloatRange BaseSizeRange = new FloatRange(0.9f, 1.1f);
-						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, BaseSizeRange.RandomInRange * worldGrid.averageTileSize, 0.005f, subMeshHill, counterClockwise: false, randomizeRotation: true, printUVs: false);
-						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
+						if (hillPath != null)
+						{
+							hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, biomesKit.materialLayer);
+							LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
+							FloatRange BaseSizeRange = new FloatRange(0.9f, 1.1f);
+							WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, BaseSizeRange.RandomInRange * worldGrid.averageTileSize, 0.005f, subMeshHill, counterClockwise: false, randomizeRotation: true, printUVs: false);
+							WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
+						}
 					}
 					if (biomesKit.forested && tile.hilliness == Hilliness.Flat && noRiver && noRoad)
 					{
@@ -164,14 +167,14 @@ namespace BiomesKit
 						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMesh);
 					}
 				}
-				else
+				else if (ModsConfig.IsActive("Odeum.WMBP"))
 				{
 					Material hillMaterial;
 					string hillPath = "WorldMaterials/BiomesKit/Default/Hills/";
 					switch (tile.hilliness)
 					{
 						case Hilliness.Flat:
-							hillPath = "Transparent";
+							hillPath = null;
 							break;
 						case Hilliness.SmallHills:
 							hillPath += "SmallHills";
@@ -186,11 +189,14 @@ namespace BiomesKit
 							hillPath += "Impassable";
 							break;
 					}
-					hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, 3510);
-					LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
-					FloatRange BaseSizeRange = new FloatRange(0.9f, 1.1f);
-					WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, BaseSizeRange.RandomInRange * worldGrid.averageTileSize, 0.005f, subMeshHill, counterClockwise: false, randomizeRotation: true, printUVs: false);
-					WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
+					if (hillPath != null)
+					{
+						hillMaterial = MaterialPool.MatFrom(hillPath, ShaderDatabase.WorldOverlayTransparentLit, 3510);
+						LayerSubMesh subMeshHill = GetSubMesh(hillMaterial);
+						FloatRange BaseSizeRange = new FloatRange(0.9f, 1.1f);
+						WorldRendererUtility.PrintQuadTangentialToPlanet(vector, vector, BaseSizeRange.RandomInRange * worldGrid.averageTileSize, 0.005f, subMeshHill, counterClockwise: false, randomizeRotation: true, printUVs: false);
+						WorldRendererUtility.PrintTextureAtlasUVs(Rand.Range(0, TexturesInAtlas.x), Rand.Range(0, TexturesInAtlas.z), TexturesInAtlas.x, TexturesInAtlas.z, subMeshHill);
+					}
 				}
 			}
 			Rand.PopState();
